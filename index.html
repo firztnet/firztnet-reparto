@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panel de gestión · Reparto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root{
+    --bg:#F4F5F7; --surface:#FFFFFF; --surface-2:#EDEFF2;
+    --text:#1C2430; --text-sec:#5B6472; --text-muted:#8B93A1;
+    --border:#E2E5EA;
+    --accent:#2B4C7E; --accent-bg:#E8EEF6;
+    --success:#2E7D5B; --success-bg:#E7F3EC;
+    --warning:#B8730F; --warning-bg:#FBF0DD;
+    --danger:#C0392B; --danger-bg:#FBEAE8;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--text);}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  a{color:inherit;}
+
+  .layout{display:flex;min-height:100vh;}
+
+  /* Sidebar */
+  .sidebar{width:220px;background:var(--surface);border-right:1px solid var(--border);
+    padding:20px 12px;flex-shrink:0;}
+  .brand{font-size:15px;font-weight:600;padding:0 10px 20px;display:flex;align-items:center;gap:8px;}
+  .brand-mark{width:8px;height:8px;border-radius:2px;background:var(--accent);}
+  .nav-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;
+    font-size:13.5px;color:var(--text-sec);cursor:pointer;margin-bottom:2px;}
+  .nav-item:hover{background:var(--surface-2);}
+  .nav-item.active{background:var(--accent-bg);color:var(--accent);font-weight:500;}
+  .nav-badge{margin-left:auto;background:var(--danger);color:#fff;font-size:10.5px;
+    padding:1px 6px;border-radius:10px;}
+
+  /* Main */
+  .main{flex:1;padding:28px 36px;max-width:1100px;}
+  .topbar{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:24px;}
+  .page-title{font-size:20px;font-weight:600;margin:0;}
+  .page-date{font-size:13px;color:var(--text-muted);}
+
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;}
+  .metric-label{font-size:12.5px;color:var(--text-sec);margin:0 0 6px;}
+  .metric-value{font-size:24px;font-weight:600;margin:0;font-family:'IBM Plex Mono',monospace;}
+
+  .section-label{font-size:12.5px;color:var(--text-sec);margin:22px 0 10px;font-weight:500;}
+  .section-label:first-child{margin-top:0;}
+
+  .row{display:flex;align-items:center;justify-content:space-between;
+    padding:11px 14px;border:1px solid var(--border);border-radius:8px;margin-bottom:7px;background:var(--surface);}
+  .row.urgent{border-color:#E3B4AD;background:var(--danger-bg);}
+  .row.warning{border-color:#E9CC9B;background:var(--warning-bg);}
+  .row.ok{border-color:#B7DAC7;background:var(--success-bg);}
+  .row-title{font-size:13.5px;font-weight:500;margin:0;}
+  .row-sub{font-size:12px;color:var(--text-sec);margin:2px 0 0;}
+  .row.urgent .row-title, .row.urgent .row-sub{color:var(--danger);}
+  .row.warning .row-title, .row.warning .row-sub{color:var(--warning);}
+  .row.ok .row-title, .row.ok .row-sub{color:var(--success);}
+
+  .btn{background:var(--accent);color:#fff;border:none;padding:8px 14px;border-radius:7px;
+    font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;}
+  .btn.secondary{background:var(--surface);color:var(--text);border:1px solid var(--border);}
+  .btn.small{padding:5px 10px;font-size:12px;}
+
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th{text-align:left;font-weight:500;color:var(--text-sec);font-size:12px;
+    padding:8px 10px;border-bottom:1px solid var(--border);}
+  td{padding:9px 10px;border-bottom:1px solid var(--border);}
+  tr:last-child td{border-bottom:none;}
+  .num{font-family:'IBM Plex Mono',monospace;text-align:right;}
+
+  .tag{display:inline-block;padding:2px 8px;border-radius:5px;font-size:11.5px;font-weight:500;}
+  .tag.success{background:var(--success-bg);color:var(--success);}
+  .tag.warning{background:var(--warning-bg);color:var(--warning);}
+  .tag.danger{background:var(--danger-bg);color:var(--danger);}
+  .tag.neutral{background:var(--surface-2);color:var(--text-sec);}
+
+  .view{display:none;}
+  .view.active{display:block;}
+
+  input, select{font-family:inherit;font-size:13px;padding:7px 9px;border:1px solid var(--border);
+    border-radius:6px;background:var(--surface);color:var(--text);}
+
+  .avatar{width:30px;height:30px;border-radius:50%;background:var(--accent-bg);color:var(--accent);
+    display:flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:600;flex-shrink:0;}
+  .person{display:flex;align-items:center;gap:10px;}
+
+  .conn-banner{background:var(--warning-bg);border:1px solid #E9CC9B;border-radius:var(--radius);
+    padding:12px 16px;margin-bottom:20px;font-size:13px;color:var(--warning);}
+  .conn-banner input{margin-right:6px;min-width:220px;}
+  .conn-banner.ok{background:var(--success-bg);border-color:#B7DAC7;color:var(--success);}
+
+  .login-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;}
+  .login-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    padding:32px 28px;width:300px;}
+
+  /* ---------- Responsive (móvil) ---------- */
+  @media (max-width: 768px) {
+    .layout{flex-direction:column;}
+    .sidebar{width:100%;display:flex;align-items:center;overflow-x:auto;
+      padding:10px 10px;gap:4px;border-right:none;border-bottom:1px solid var(--border);
+      -webkit-overflow-scrolling:touch;}
+    .sidebar .brand{display:none;}
+    .nav-item{white-space:nowrap;margin-bottom:0;flex-shrink:0;}
+    .main{padding:16px 14px;max-width:100%;}
+    .grid-2, .grid-3{grid-template-columns:1fr;}
+    .card{padding:14px 16px;}
+    table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap;}
+    .modal{width:88vw;padding:20px;}
+    .login-card{width:88vw;max-width:320px;padding:26px 22px;}
+    .row{flex-wrap:wrap;gap:8px;}
+    .topbar{flex-wrap:wrap;gap:4px;}
+  }
+  .loading{color:var(--text-muted);font-size:13px;padding:8px 0;}
+  .empty{color:var(--text-muted);font-size:13px;padding:8px 0;}
+
+  .modal-overlay{display:none;position:fixed;inset:0;background:rgba(28,36,48,0.4);
+    align-items:center;justify-content:center;z-index:50;}
+  .modal-overlay.active{display:flex;}
+  .modal{background:var(--surface);border-radius:var(--radius);padding:22px 24px;width:340px;}
+  .modal h3{margin:0 0 16px;font-size:16px;font-weight:600;}
+  .modal-field{margin-bottom:12px;}
+  .modal-field label{display:block;font-size:12.5px;color:var(--text-sec);margin-bottom:5px;}
+  .modal-field input, .modal-field select{width:100%;}
+  .modal-actions{display:flex;gap:8px;margin-top:18px;}
+  .modal-actions .btn{flex:1;}
+</style>
+</head>
+<body>
+
+<div class="login-screen" id="login-screen">
+  <div class="login-card">
+    <div class="brand" style="justify-content:center;margin-bottom:20px;"><div class="brand-mark"></div>Firztnet Reparto</div>
+    <div class="modal-field">
+      <label>Email</label>
+      <input id="login-email" type="email" placeholder="gerente@firztnet.es" style="width:100%;">
+    </div>
+    <div class="modal-field">
+      <label>Contraseña</label>
+      <input id="login-password" type="password" style="width:100%;">
+    </div>
+    <p id="login-error" style="color:var(--danger);font-size:12.5px;display:none;margin:0 0 10px;"></p>
+    <button class="btn" style="width:100%;" onclick="iniciarSesion()">Iniciar sesión</button>
+    <p style="font-size:11.5px;color:var(--text-muted);margin-top:14px;">
+      El primer usuario se crea en Supabase → Authentication → Add user.
+    </p>
+  </div>
+</div>
+
+<div class="layout" id="app-layout" style="display:none;">
+  <nav class="sidebar">
+    <div class="brand"><div class="brand-mark"></div>Firztnet Reparto</div>
+    <div class="nav-item active" data-view="alertas">Alertas <span class="nav-badge">3</span></div>
+    <div class="nav-item" data-view="cobertura">Cobertura del día</div>
+    <div class="nav-item" data-view="asignacion">Asignación matutina</div>
+    <div class="nav-item" data-view="flota">Flota y talleres</div>
+    <div class="nav-item" data-view="liquidacion">Liquidación</div>
+    <div class="nav-item" data-view="caja">Caja</div>
+    <div class="nav-item" data-view="iva">IVA trimestral</div>
+    <div class="nav-item" data-view="reportes">Reportes</div>
+    <div class="nav-item" data-view="empleados">Empleados</div>
+    <div class="nav-item" data-view="configuracion">Configuración</div>
+    <div class="nav-item" onclick="cerrarSesion()" style="margin-top:16px;color:var(--danger);">Cerrar sesión</div>
+  </nav>
+
+  <main class="main">
+
+    <!-- ALERTAS -->
+    <section class="view active" id="view-alertas">
+      <div class="topbar"><h1 class="page-title">Central de alertas</h1><span class="page-date">14 sep 2026</span></div>
+
+      <div id="alertas-list">
+        <p class="empty">Conecta Supabase para ver las alertas reales.</p>
+      </div>
+    </section>
+
+    <!-- COBERTURA -->
+    <section class="view" id="view-cobertura">
+      <div class="topbar"><h1 class="page-title">Cobertura de hoy</h1><span class="page-date">14 sep 2026</span></div>
+
+      <div id="cobertura-content">
+        <p class="empty">Conecta Supabase para ver la cobertura real.</p>
+      </div>
+    </section>
+
+    <!-- ASIGNACIÓN -->
+    <section class="view" id="view-asignacion">
+      <div class="topbar"><h1 class="page-title">Asignación de carga</h1><span class="page-date">14 sep 2026</span></div>
+
+      <table>
+        <thead><tr><th>Repartidor</th><th>Modo</th><th>Zona</th><th class="num">Bultos</th></tr></thead>
+        <tbody id="asignacion-tbody">
+          <tr><td colspan="4" class="empty">Conecta Supabase para ver la asignación real.</td></tr>
+        </tbody>
+      </table>
+      <div style="margin-top:16px;"><button class="btn" onclick="confirmarAsignacion()">Confirmar asignación del día</button></div>
+    </section>
+
+    <!-- FLOTA -->
+    <section class="view" id="view-flota">
+      <div class="topbar"><h1 class="page-title">Flota</h1><span class="page-date">10 vehículos</span></div>
+
+      <div class="grid-2" style="margin-bottom:16px;" id="flota-metrics">
+        <div class="card"><p class="metric-label">Operativos</p><p class="metric-value">—</p></div>
+        <div class="card"><p class="metric-label">En taller</p><p class="metric-value">—</p></div>
+      </div>
+
+      <table>
+        <thead><tr><th>Vehículo</th><th>Estado</th><th>Detalle</th></tr></thead>
+        <tbody id="flota-tbody">
+          <tr><td colspan="3" class="empty">Conecta Supabase para ver la flota real.</td></tr>
+        </tbody>
+      </table>
+      <div style="margin-top:16px;"><button class="btn" onclick="registrarAveria()">Registrar avería</button></div>
+    </section>
+
+    <!-- LIQUIDACIÓN -->
+    <section class="view" id="view-liquidacion">
+      <div class="topbar"><h1 class="page-title">Liquidación semanal</h1><span class="page-date">8-14 sep</span></div>
+
+      <table>
+        <thead><tr><th>Empleado</th><th class="num">Entregas</th><th class="num">Bruto</th><th class="num">Adelantos</th><th class="num">Penalizaciones</th><th class="num">Neto</th><th></th></tr></thead>
+        <tbody id="liquidacion-tbody">
+          <tr><td colspan="7" class="empty">Conecta Supabase para calcular la liquidación real.</td></tr>
+        </tbody>
+      </table>
+      <div id="liquidacion-avisos" style="margin-top:14px;"></div>
+    </section>
+
+    <!-- CAJA -->
+    <section class="view" id="view-caja">
+      <div class="topbar"><h1 class="page-title">Caja</h1><span class="page-date">14 sep 2026</span></div>
+
+      <div class="grid-3" style="margin-bottom:18px;" id="caja-metrics">
+        <div class="card"><p class="metric-label">Salidas hoy</p><p class="metric-value">—</p></div>
+        <div class="card"><p class="metric-label">Este mes</p><p class="metric-value">—</p></div>
+        <div class="card"><p class="metric-label">Pendiente revisión</p><p class="metric-value">—</p></div>
+      </div>
+
+      <table>
+        <thead><tr><th>Concepto</th><th>Método</th><th class="num">Monto</th></tr></thead>
+        <tbody id="caja-tbody">
+          <tr><td colspan="3" class="empty">Conecta Supabase para ver los movimientos reales.</td></tr>
+        </tbody>
+      </table>
+      <div style="margin-top:16px;"><button class="btn" onclick="registrarMovimientoCaja()">Registrar movimiento</button></div>
+    </section>
+
+    <!-- IVA -->
+    <section class="view" id="view-iva">
+      <div class="topbar"><h1 class="page-title">IVA trimestral</h1><span class="page-date">2026 · Q3</span></div>
+
+      <div class="grid-2" style="margin-bottom:14px;" id="iva-metrics">
+        <div class="card"><p class="metric-label">IVA repercutido</p><p class="metric-value">—</p></div>
+        <div class="card"><p class="metric-label">IVA soportado</p><p class="metric-value">—</p></div>
+      </div>
+      <div class="card" style="background:var(--accent-bg);border-color:#C7D6E8;margin-bottom:18px;">
+        <p class="metric-label" style="color:var(--accent)">Balance a ingresar</p>
+        <p class="metric-value" style="color:var(--accent);font-size:28px;" id="iva-balance">—</p>
+      </div>
+
+      <table>
+        <thead><tr><th>Categoría</th><th class="num">Base</th></tr></thead>
+        <tbody id="iva-tbody">
+          <tr><td colspan="2" class="empty">Conecta Supabase para ver el desglose real.</td></tr>
+        </tbody>
+      </table>
+      <div style="margin-top:16px;"><button class="btn" onclick="exportarIVA()">Exportar CSV para gestoría</button></div>
+    </section>
+
+    <!-- REPORTES -->
+    <section class="view" id="view-reportes">
+      <div class="topbar"><h1 class="page-title">Reportes</h1><span class="page-date">Septiembre 2026</span></div>
+
+      <p class="section-label">Ranking de efectividad</p>
+      <div id="reportes-ranking"><p class="empty">Conecta Supabase para ver el ranking real.</p></div>
+
+      <p class="section-label">Alertas de empleados (30 días)</p>
+      <div id="reportes-alertas-empleados"><p class="empty">Conecta Supabase para ver las alertas reales.</p></div>
+
+      <p class="section-label">Accesos rápidos</p>
+      <div class="grid-2">
+        <button class="btn secondary">Reporte de proveedores</button>
+        <button class="btn secondary">Resumen de adelantos</button>
+      </div>
+    </section>
+
+    <!-- EMPLEADOS -->
+    <section class="view" id="view-empleados">
+      <div class="topbar"><h1 class="page-title">Empleados</h1><span class="page-date">18 activos</span></div>
+
+      <p class="section-label">Empleados y descanso semanal</p>
+      <table>
+        <thead><tr><th>Empleado</th><th>Día de descanso</th><th>Vacaciones</th></tr></thead>
+        <tbody id="empleados-tbody">
+          <tr><td colspan="3" class="empty">Conecta Supabase para ver los empleados reales.</td></tr>
+        </tbody>
+      </table>
+
+      <p class="section-label">Herramientas asignadas</p>
+      <div id="herramientas-list"><p class="empty">Conecta Supabase para ver las herramientas reales.</p></div>
+    </section>
+
+    <!-- CONFIGURACIÓN -->
+    <section class="view" id="view-configuracion">
+      <div class="topbar"><h1 class="page-title">Configuración</h1></div>
+
+      <p class="section-label">Proveedores</p>
+      <table>
+        <thead><tr><th>Nombre</th><th class="num">Tarifa por defecto</th></tr></thead>
+        <tbody id="config-proveedores-tbody">
+          <tr><td colspan="2" class="empty">Conecta Supabase para ver los proveedores reales.</td></tr>
+        </tbody>
+      </table>
+
+      <p class="section-label">Tipos de paquete</p>
+      <table>
+        <thead><tr><th>Tipo</th><th>Recargo</th><th>Foto obligatoria</th></tr></thead>
+        <tbody id="config-tipos-tbody">
+          <tr><td colspan="3" class="empty">Conecta Supabase para ver los tipos reales.</td></tr>
+        </tbody>
+      </table>
+
+      <p class="section-label">Umbrales de alerta</p>
+      <table>
+        <tr><th>Alerta</th><th class="num">Umbral</th></tr>
+        <tr><td>Días de vehículo en taller</td><td class="num">5 días</td></tr>
+        <tr><td>Adelanto requiere revisión</td><td class="num">60 €</td></tr>
+        <tr><td>Ausencias/mes para alerta</td><td class="num">3</td></tr>
+      </table>
+    </section>
+
+  </main>
+</div>
+
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal" id="modal-content"></div>
+</div>
+
+<script>
+  // ============================================================
+  // CONEXIÓN A SUPABASE + LOGIN REAL (Supabase Auth)
+  // ============================================================
+  const SUPABASE_URL = 'https://czskesruiyrmrgfwukbv.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_2lBXhGkjIlnA4Tg2egBBWA_BNsPrqGh';
+
+  let sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  let conectado = false;
+
+  // Umbrales configurables (coinciden con la tabla "Umbrales" del panel)
+  const UMBRAL_DIAS_TALLER = 5;
+  const UMBRAL_ADELANTO_REVISION = 60;
+  const UMBRAL_AUSENCIAS_MES = 3;
+  const UMBRAL_INCIDENCIAS_MES = 5;
+
+  async function iniciarSesion() {
+    const email = document.getElementById('login-email').value.trim();
+    const password = document.getElementById('login-password').value;
+    const errorEl = document.getElementById('login-error');
+    errorEl.style.display = 'none';
+
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) {
+      errorEl.textContent = 'Email o contraseña incorrectos.';
+      errorEl.style.display = 'block';
+      return;
+    }
+
+    conectado = true;
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app-layout').style.display = 'flex';
+    cargarVistaActiva();
+  }
+
+  async function cerrarSesion() {
+    await sb.auth.signOut();
+    conectado = false;
+    document.getElementById('app-layout').style.display = 'none';
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('login-password').value = '';
+  }
+
+  // Si ya había una sesión activa (recarga de página), entra directo.
+  (async () => {
+    const { data } = await sb.auth.getSession();
+    if (data.session) {
+      conectado = true;
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('app-layout').style.display = 'flex';
+      cargarVistaActiva();
+    }
+  })();
+
+  function euros(n) {
+    return (n ?? 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+  }
+
+  function iniciales(nombre) {
+    if (!nombre) return '—';
+    return nombre.split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase();
+  }
+
+  // ------------------------------------------------------------
+  // Modal reutilizable
+  // ------------------------------------------------------------
+  function abrirModal(html) {
+    document.getElementById('modal-content').innerHTML = html;
+    document.getElementById('modal-overlay').classList.add('active');
+  }
+  function cerrarModal() {
+    document.getElementById('modal-overlay').classList.remove('active');
+  }
+  document.getElementById('modal-overlay').addEventListener('click', (e) => {
+    if (e.target.id === 'modal-overlay') cerrarModal();
+  });
+
+  // ============================================================
+  // NAVEGACIÓN
+  // ============================================================
+  const cargadores = {
+    alertas: cargarAlertas,
+    cobertura: cargarCobertura,
+    asignacion: cargarAsignacion,
+    flota: cargarFlota,
+    liquidacion: cargarLiquidacion,
+    caja: cargarCaja,
+    iva: cargarIVA,
+    reportes: cargarReportes,
+    empleados: cargarEmpleados,
+    configuracion: cargarConfiguracion,
+  };
+
+  function cargarVistaActiva() {
+    const activo = document.querySelector('.nav-item.active');
+    if (!conectado || !activo) return;
+    const fn = cargadores[activo.dataset.view];
+    if (fn) fn();
+  }
+
+  document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', () => {
+      document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      item.classList.add('active');
+      document.getElementById('view-' + item.dataset.view).classList.add('active');
+      cargarVistaActiva();
+    });
+  });
+
+  // ============================================================
+  // ALERTAS
+  // ============================================================
+  async function cargarAlertas() {
+    const el = document.getElementById('alertas-list');
+    el.innerHTML = '<p class="loading">Cargando alertas...</p>';
+
+    const filas = [];
+    const hoy = new Date();
+
+    // Vehículos en taller por encima del umbral de días
+    const { data: talleres } = await sb.from('talleres_flota')
+      .select('*, vehiculos(matricula)').is('fecha_salida', null);
+    (talleres || []).forEach(t => {
+      const dias = Math.floor((hoy - new Date(t.fecha_entrada)) / 86400000);
+      if (dias >= UMBRAL_DIAS_TALLER) {
+        filas.push({ tipo: 'urgent', titulo: `${t.vehiculos?.matricula || 'Vehículo'} en taller · ${dias} días`,
+          sub: `Supera el umbral de ${UMBRAL_DIAS_TALLER} días inmovilizado` });
+      }
+    });
+
+    // ITV próxima a vencer (30 días)
+    const { data: vehiculos } = await sb.from('vehiculos').select('*');
+    (vehiculos || []).forEach(v => {
+      if (!v.fecha_itv) return;
+      const dias = Math.floor((new Date(v.fecha_itv) - hoy) / 86400000);
+      if (dias >= 0 && dias <= 30) {
+        filas.push({ tipo: dias <= 7 ? 'urgent' : 'warning', titulo: `ITV ${v.matricula} en ${dias} días` });
+      }
+    });
+
+    // Facturas de proveedor por pagar
+    const { data: facturas } = await sb.from('facturas_proveedor').select('*').eq('estado', 'pendiente');
+    (facturas || []).forEach(f => {
+      if (!f.fecha_limite_pago) return;
+      const dias = Math.floor((new Date(f.fecha_limite_pago) - hoy) / 86400000);
+      if (dias <= 7) {
+        filas.push({ tipo: dias < 0 ? 'urgent' : 'urgent', titulo: `Factura por pagar vence en ${dias} días`,
+          sub: euros(f.total) });
+      }
+    });
+
+    // Garantías por vencer (30 días)
+    const { data: garantias } = await sb.from('gastos_y_garantias').select('*').not('fecha_fin_garantia', 'is', null);
+    (garantias || []).forEach(g => {
+      const dias = Math.floor((new Date(g.fecha_fin_garantia) - hoy) / 86400000);
+      if (dias >= 0 && dias <= 30) {
+        filas.push({ tipo: 'warning', titulo: `Garantía de "${g.concepto}" vence en ${dias} días` });
+      }
+    });
+
+    if (filas.length === 0) {
+      el.innerHTML = '<p class="empty">Sin alertas activas.</p>';
+      return;
+    }
+    el.innerHTML = filas.map(f => `
+      <div class="row ${f.tipo}">
+        <div><p class="row-title">${f.titulo}</p>${f.sub ? `<p class="row-sub">${f.sub}</p>` : ''}</div>
+      </div>`).join('');
+
+    document.querySelector('.nav-badge').textContent = filas.filter(f => f.tipo === 'urgent').length;
+  }
+
+  // ============================================================
+  // COBERTURA DEL DÍA
+  // ============================================================
+  async function cargarCobertura() {
+    const el = document.getElementById('cobertura-content');
+    el.innerHTML = '<p class="loading">Cargando cobertura...</p>';
+
+    const hoy = new Date().toISOString().split('T')[0];
+    const { data: zonas } = await sb.from('zonas_cobertura')
+      .select('*, empleados(nombre)').eq('fecha', hoy);
+
+    if (!zonas || zonas.length === 0) {
+      el.innerHTML = '<p class="empty">Sin zonas registradas para hoy.</p>';
+      return;
+    }
+
+    const cubiertas = zonas.filter(z => z.estado === 'cubierta').length;
+    let html = `<div class="grid-2" style="margin-bottom:16px;">
+      <div class="card"><p class="metric-label">Zonas cubiertas</p><p class="metric-value">${cubiertas} / ${zonas.length}</p></div>
+      <div class="card"><p class="metric-label">Total zonas hoy</p><p class="metric-value">${zonas.length}</p></div>
+    </div>`;
+
+    html += zonas.map(z => {
+      const ok = z.estado === 'cubierta';
+      return `<div class="row ${ok ? 'ok' : 'urgent'}">
+        <div class="person">
+          <div class="avatar" style="${ok ? '' : 'background:var(--danger-bg);color:var(--danger)'}">${iniciales(z.empleados?.nombre)}</div>
+          <div>
+            <p class="row-title" style="${ok ? 'color:var(--text)' : ''}">${z.codigo_postal}${z.sub_zona ? ' · ' + z.sub_zona : ''}</p>
+            <p class="row-sub" style="${ok ? 'color:var(--text-sec)' : ''}">${z.empleados?.nombre || 'Sin asignar'}</p>
+          </div>
+        </div>
+        ${ok ? '<span class="tag success">Cubierta</span>' :
+          `<button class="btn small" onclick="reasignarZona('${z.id}')">Reasignar</button>`}
+      </div>`;
+    }).join('');
+
+    el.innerHTML = html;
+  }
+
+  async function reasignarZona(zonaId) {
+    const { data: empleados } = await sb.from('empleados').select('id, nombre').eq('activo', true);
+    abrirModal(`
+      <h3>Reasignar zona</h3>
+      <div class="modal-field">
+        <label>Empleado que cubrirá la zona</label>
+        <select id="modal-empleado">
+          ${(empleados || []).map(e => `<option value="${e.id}">${e.nombre}</option>`).join('')}
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn secondary" onclick="cerrarModal()">Cancelar</button>
+        <button class="btn" onclick="guardarReasignacion('${zonaId}')">Reasignar</button>
+      </div>
+    `);
+  }
+
+  async function guardarReasignacion(zonaId) {
+    const empleadoId = document.getElementById('modal-empleado').value;
+    await sb.from('zonas_cobertura').update({
+      empleado_asignado_id: empleadoId, estado: 'cubierta',
+    }).eq('id', zonaId);
+    cerrarModal();
+    cargarCobertura();
+  }
+
+  // ============================================================
+  // ASIGNACIÓN MATUTINA
+  // ============================================================
+  async function cargarAsignacion() {
+    const tbody = document.getElementById('asignacion-tbody');
+    tbody.innerHTML = '<tr><td colspan="4" class="loading">Cargando...</td></tr>';
+
+    const hoy = new Date().toISOString().split('T')[0];
+    const { data: turnos } = await sb.from('turnos_carga')
+      .select('*, empleados(nombre, modo_transporte)').eq('fecha', hoy);
+
+    if (!turnos || turnos.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" class="empty">Sin turnos registrados hoy.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = turnos.map(t => `
+      <tr>
+        <td><div class="person"><div class="avatar">${iniciales(t.empleados?.nombre)}</div>${t.empleados?.nombre || '—'}</div></td>
+        <td>${t.empleados?.modo_transporte === 'a_pie' ? 'A pie' : 'Furgoneta'}</td>
+        <td>${t.zona || '—'}</td>
+        <td class="num">${t.bultos_iniciales}</td>
+      </tr>`).join('');
+  }
+
+  function confirmarAsignacion() {
+    alert('Asignación del día confirmada.');
+  }
+
+  // ============================================================
+  // FLOTA
+  // ============================================================
+  async function cargarFlota() {
+    const tbody = document.getElementById('flota-tbody');
+    tbody.innerHTML = '<tr><td colspan="3" class="loading">Cargando...</td></tr>';
+
+    const { data: vehiculos } = await sb.from('vehiculos').select('*');
+    if (!vehiculos) { tbody.innerHTML = '<tr><td colspan="3" class="empty">Sin vehículos.</td></tr>'; return; }
+
+    const operativos = vehiculos.filter(v => v.estado === 'operativo').length;
+    const enTaller = vehiculos.filter(v => v.estado === 'en_taller').length;
+    document.getElementById('flota-metrics').innerHTML = `
+      <div class="card"><p class="metric-label">Operativos</p><p class="metric-value">${operativos}</p></div>
+      <div class="card"><p class="metric-label">En taller</p><p class="metric-value" style="color:var(--danger)">${enTaller}</p></div>`;
+
+    tbody.innerHTML = vehiculos.map(v => {
+      const tag = v.estado === 'en_taller' ? '<span class="tag danger">En taller</span>'
+        : v.estado === 'en_servicio_adicional' ? '<span class="tag warning">Servicio adicional</span>'
+        : '<span class="tag success">Operativa</span>';
+      return `<tr><td class="mono">${v.matricula}</td><td>${tag}</td><td>${v.modelo || '—'}</td></tr>`;
+    }).join('');
+  }
+
+  async function registrarAveria() {
+    const { data: vehiculos } = await sb.from('vehiculos').select('id, matricula');
+    abrirModal(`
+      <h3>Registrar avería</h3>
+      <div class="modal-field">
+        <label>Vehículo</label>
+        <select id="modal-vehiculo">
+          ${(vehiculos || []).map(v => `<option value="${v.id}">${v.matricula}</option>`).join('')}
+        </select>
+      </div>
+      <div class="modal-field">
+        <label>Descripción de la avería</label>
+        <input id="modal-averia" type="text" placeholder="Avería de frenos">
+      </div>
+      <div class="modal-field">
+        <label>Base imponible (€)</label>
+        <input id="modal-base" type="number" step="0.01" placeholder="200.00">
+      </div>
+      <div class="modal-field">
+        <label>IVA (€)</label>
+        <input id="modal-iva" type="number" step="0.01" placeholder="42.00">
+      </div>
+      <div class="modal-actions">
+        <button class="btn secondary" onclick="cerrarModal()">Cancelar</button>
+        <button class="btn" onclick="guardarAveria()">Registrar</button>
+      </div>
+    `);
+  }
+
+  async function guardarAveria() {
+    const vehiculoId = document.getElementById('modal-vehiculo').value;
+    const averia = document.getElementById('modal-averia').value;
+    const base = parseFloat(document.getElementById('modal-base').value || '0');
+    const iva = parseFloat(document.getElementById('modal-iva').value || '0');
+
+    await sb.from('talleres_flota').insert({
+      vehiculo_id: vehiculoId, fecha_entrada: new Date().toISOString().split('T')[0],
+      averia, base_imponible: base, iva,
+    });
+    await sb.from('vehiculos').update({ estado: 'en_taller' }).eq('id', vehiculoId);
+    cerrarModal();
+    cargarFlota();
+  }
+
+  // ============================================================
+  // LIQUIDACIÓN
+  // ============================================================
+  async function cargarLiquidacion() {
+    const tbody = document.getElementById('liquidacion-tbody');
+    tbody.innerHTML = '<tr><td colspan="7" class="loading">Calculando...</td></tr>';
+
+    const { data: empleados } = await sb.from('empleados').select('*').eq('activo', true);
+    const { data: turnos } = await sb.from('turnos_carga').select('*');
+    const { data: tarifas } = await sb.from('tarifas_empleado').select('*');
+    const { data: anticipos } = await sb.from('anticipos').select('*').eq('estado', 'pendiente_descuento');
+    const { data: penalizaciones } = await sb.from('penalizaciones').select('*').eq('estado', 'pendiente');
+
+    if (!empleados) { tbody.innerHTML = '<tr><td colspan="7" class="empty">Sin empleados.</td></tr>'; return; }
+
+    let avisos = '';
+    tbody.innerHTML = empleados.map(emp => {
+      const turnosEmp = (turnos || []).filter(t => t.empleado_id === emp.id);
+      const entregas = turnosEmp.reduce((s, t) => s + (t.entregados || 0), 0);
+      const tarifa = (tarifas || []).find(t => t.empleado_id === emp.id && !t.vigente_hasta);
+      const bruto = entregas * (tarifa?.monto_por_paquete || 0);
+
+      const adelantosEmp = (anticipos || []).filter(a => a.empleado_id === emp.id);
+      const totalAdelantos = adelantosEmp.reduce((s, a) => s + Number(a.monto), 0);
+
+      const penalizacionesEmp = (penalizaciones || []).filter(p => p.empleado_id === emp.id);
+      const totalPenalizaciones = penalizacionesEmp.reduce((s, p) => s + Number(p.monto), 0);
+
+      const neto = bruto - totalAdelantos - totalPenalizaciones;
+
+      adelantosEmp.forEach(a => {
+        if (a.requiere_revision) {
+          avisos += `<div class="row warning">
+            <div><p class="row-title">Adelanto de ${euros(a.monto)} pendiente de revisión</p>
+            <p class="row-sub">${emp.nombre} · supera el límite configurado</p></div></div>`;
+        }
+      });
+
+      return `<tr>
+        <td><div class="person"><div class="avatar">${iniciales(emp.nombre)}</div>${emp.nombre}</div></td>
+        <td class="num">${entregas}</td>
+        <td class="num">${euros(bruto)}</td>
+        <td class="num" style="color:var(--danger)">${totalAdelantos ? '-' + euros(totalAdelantos) : euros(0)}</td>
+        <td class="num" style="color:var(--danger)">${totalPenalizaciones ? '-' + euros(totalPenalizaciones) : euros(0)}</td>
+        <td class="num" style="font-weight:600">${euros(neto)}</td>
+        <td><button class="btn small secondary" onclick="aprobarLiquidacion('${emp.id}')">Aprobar</button></td>
+      </tr>`;
+    }).join('');
+
+    document.getElementById('liquidacion-avisos').innerHTML = avisos;
+  }
+
+  async function aprobarLiquidacion(empleadoId) {
+    // Marca adelantos y penalizaciones pendientes de este empleado como aplicados,
+    // evitando que se vuelvan a descontar en el siguiente periodo.
+    await sb.from('anticipos').update({ estado: 'aplicado' })
+      .eq('empleado_id', empleadoId).eq('estado', 'pendiente_descuento');
+    await sb.from('penalizaciones').update({ estado: 'aplicada' })
+      .eq('empleado_id', empleadoId).eq('estado', 'pendiente');
+    cargarLiquidacion();
+  }
+
+  // ============================================================
+  // CAJA
+  // ============================================================
+  async function cargarCaja() {
+    const tbody = document.getElementById('caja-tbody');
+    tbody.innerHTML = '<tr><td colspan="3" class="loading">Cargando...</td></tr>';
+
+    const hoy = new Date().toISOString().split('T')[0];
+    const inicioMes = new Date(); inicioMes.setDate(1);
+
+    const { data: movimientos } = await sb.from('caja_movimientos').select('*').order('fecha', { ascending: false }).limit(30);
+    const { data: pendientes } = await sb.from('anticipos').select('monto').eq('requiere_revision', true).eq('estado', 'pendiente_descuento');
+
+    if (!movimientos) { tbody.innerHTML = '<tr><td colspan="3" class="empty">Sin movimientos.</td></tr>'; return; }
+
+    const salidasHoy = movimientos.filter(m => m.fecha === hoy && m.tipo_movimiento === 'salida')
+      .reduce((s, m) => s + Number(m.monto), 0);
+    const netoMes = movimientos.filter(m => new Date(m.fecha) >= inicioMes)
+      .reduce((s, m) => s + (m.tipo_movimiento === 'salida' ? -Number(m.monto) : Number(m.monto)), 0);
+    const totalPendiente = (pendientes || []).reduce((s, a) => s + Number(a.monto), 0);
+
+    document.getElementById('caja-metrics').innerHTML = `
+      <div class="card"><p class="metric-label">Salidas hoy</p><p class="metric-value" style="color:var(--danger)">-${euros(salidasHoy)}</p></div>
+      <div class="card"><p class="metric-label">Este mes</p><p class="metric-value" style="color:${netoMes < 0 ? 'var(--danger)' : 'var(--success)'}">${euros(netoMes)}</p></div>
+      <div class="card"><p class="metric-label">Pendiente revisión</p><p class="metric-value" style="color:var(--warning)">${euros(totalPendiente)}</p></div>`;
+
+    tbody.innerHTML = movimientos.map(m => `
+      <tr>
+        <td>${m.categoria.replace('_', ' ')}</td>
+        <td>${m.metodo_pago || '—'}</td>
+        <td class="num" style="color:${m.tipo_movimiento === 'salida' ? 'var(--danger)' : 'var(--success)'}">
+          ${m.tipo_movimiento === 'salida' ? '-' : '+'}${euros(m.monto)}</td>
+      </tr>`).join('');
+  }
+
+  function registrarMovimientoCaja() {
+    abrirModal(`
+      <h3>Registrar movimiento</h3>
+      <div class="modal-field">
+        <label>Categoría</label>
+        <select id="modal-categoria">
+          <option value="adelanto">Adelanto</option>
+          <option value="pago_taller">Pago a taller</option>
+          <option value="pago_proveedor">Pago a proveedor</option>
+          <option value="gasto_general">Gasto general</option>
+          <option value="servicio_adicional">Servicio adicional (mudanza/alquiler)</option>
+          <option value="otro">Otro</option>
+        </select>
+      </div>
+      <div class="modal-field">
+        <label>Tipo</label>
+        <select id="modal-tipo-mov">
+          <option value="salida">Salida</option>
+          <option value="ingreso">Ingreso</option>
+        </select>
+      </div>
+      <div class="modal-field">
+        <label>Monto (€)</label>
+        <input id="modal-monto" type="number" step="0.01" placeholder="50.00">
+      </div>
+      <div class="modal-field">
+        <label>Método de pago</label>
+        <select id="modal-metodo">
+          <option value="efectivo">Efectivo</option>
+          <option value="transferencia">Transferencia</option>
+          <option value="tarjeta">Tarjeta</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn secondary" onclick="cerrarModal()">Cancelar</button>
+        <button class="btn" onclick="guardarMovimientoCaja()">Registrar</button>
+      </div>
+    `);
+  }
+
+  async function guardarMovimientoCaja() {
+    const categoria = document.getElementById('modal-categoria').value;
+    const tipo_movimiento = document.getElementById('modal-tipo-mov').value;
+    const monto = parseFloat(document.getElementById('modal-monto').value || '0');
+    const metodo_pago = document.getElementById('modal-metodo').value;
+
+    await sb.from('caja_movimientos').insert({ categoria, tipo_movimiento, monto, metodo_pago });
+    cerrarModal();
+    cargarCaja();
+  }
+
+  // ============================================================
+  // IVA TRIMESTRAL
+  // ============================================================
+  async function cargarIVA() {
+    document.getElementById('iva-tbody').innerHTML = '<tr><td colspan="2" class="loading">Calculando...</td></tr>';
+
+    const { data: facturasCliente } = await sb.from('facturas_cliente').select('*');
+    const { data: talleres } = await sb.from('talleres_flota').select('*');
+    const { data: gastos } = await sb.from('gastos_y_garantias').select('*');
+
+    const baseRepercutida = (facturasCliente || []).reduce((s, f) => s + Number(f.base_imponible), 0);
+    const ivaRepercutido = (facturasCliente || []).reduce((s, f) => s + Number(f.iva), 0);
+
+    const baseTalleres = (talleres || []).reduce((s, t) => s + Number(t.base_imponible), 0);
+    const ivaTalleres = (talleres || []).reduce((s, t) => s + Number(t.iva), 0);
+    const baseGastos = (gastos || []).reduce((s, g) => s + Number(g.base_imponible), 0);
+    const ivaGastos = (gastos || []).reduce((s, g) => s + Number(g.iva), 0);
+
+    const ivaSoportado = ivaTalleres + ivaGastos;
+    const balance = ivaRepercutido - ivaSoportado;
+
+    document.getElementById('iva-metrics').innerHTML = `
+      <div class="card"><p class="metric-label">IVA repercutido</p><p class="metric-value">${euros(ivaRepercutido)}</p></div>
+      <div class="card"><p class="metric-label">IVA soportado</p><p class="metric-value">${euros(ivaSoportado)}</p></div>`;
+    document.getElementById('iva-balance').textContent = euros(balance);
+
+    document.getElementById('iva-tbody').innerHTML = `
+      <tr><td>Facturas a clientes</td><td class="num">${euros(baseRepercutida)}</td></tr>
+      <tr><td>Talleres y repuestos</td><td class="num">${euros(baseTalleres)}</td></tr>
+      <tr><td>Otros gastos y garantías</td><td class="num">${euros(baseGastos)}</td></tr>`;
+  }
+
+  function exportarIVA() {
+    alert('Exportación CSV generada (conectar a almacenamiento real para descarga).');
+  }
+
+  // ============================================================
+  // REPORTES
+  // ============================================================
+  async function cargarReportes() {
+    document.getElementById('reportes-ranking').innerHTML = '<p class="loading">Calculando...</p>';
+    document.getElementById('reportes-alertas-empleados').innerHTML = '<p class="loading">Calculando...</p>';
+
+    const { data: empleados } = await sb.from('empleados').select('*').eq('activo', true);
+    const { data: turnos } = await sb.from('turnos_carga').select('*');
+    const { data: ausencias } = await sb.from('ausencias').select('*');
+    const { data: incidentesViales } = await sb.from('incidentes_viales').select('*');
+
+    const hace30 = new Date(); hace30.setDate(hace30.getDate() - 30);
+
+    const filas = (empleados || []).map(emp => {
+      const turnosEmp = (turnos || []).filter(t => t.empleado_id === emp.id);
+      const entregados = turnosEmp.reduce((s, t) => s + (t.entregados || 0), 0);
+      const asignados = turnosEmp.reduce((s, t) => s + (t.bultos_iniciales || 0), 0);
+      const incidencias = turnosEmp.reduce((s, t) => s + (t.incidencias || 0), 0);
+      const efectividad = asignados > 0 ? Math.round((entregados / asignados) * 100) : 0;
+
+      const ausenciasEmp = (ausencias || []).filter(a => a.empleado_id === emp.id && new Date(a.fecha) >= hace30).length;
+      const vialesEmp = (incidentesViales || []).filter(v => v.empleado_id === emp.id && new Date(v.fecha) >= hace30).length;
+
+      return { emp, entregados, incidencias, efectividad, ausenciasEmp, vialesEmp };
+    });
+
+    filas.sort((a, b) => b.efectividad - a.efectividad);
+
+    document.getElementById('reportes-ranking').innerHTML = filas.slice(0, 5).map(f => {
+      const bajo = f.efectividad < 85;
+      return `<div class="row ${bajo ? 'urgent' : 'ok'}">
+        <div class="person"><div class="avatar" style="${bajo ? 'background:var(--danger-bg);color:var(--danger)' : 'background:var(--success-bg);color:var(--success)'}">${iniciales(f.emp.nombre)}</div>
+        <div><p class="row-title" style="${bajo ? '' : 'color:var(--text)'}">${f.emp.nombre}</p>
+        <p class="row-sub" style="${bajo ? '' : 'color:var(--text-sec)'}">${f.entregados} entregados · ${f.incidencias} incidencias</p></div></div>
+        <span style="font-weight:600;color:${bajo ? 'var(--danger)' : 'var(--success)'}">${f.efectividad}%</span>
+      </div>`;
+    }).join('') || '<p class="empty">Sin datos aún.</p>';
+
+    const conAlerta = filas.filter(f => f.ausenciasEmp >= UMBRAL_AUSENCIAS_MES || f.incidencias >= UMBRAL_INCIDENCIAS_MES);
+    document.getElementById('reportes-alertas-empleados').innerHTML = conAlerta.length
+      ? conAlerta.map(f => `<div class="row ${f.ausenciasEmp >= UMBRAL_AUSENCIAS_MES ? 'urgent' : 'warning'}">
+          <div><p class="row-title">${f.emp.nombre}</p>
+          <p class="row-sub">${f.ausenciasEmp} ausencias · ${f.incidencias} incidencias · ${f.vialesEmp} vial</p></div>
+        </div>`).join('')
+      : '<p class="empty">Sin empleados con alertas en los últimos 30 días.</p>';
+  }
+
+  // ============================================================
+  // EMPLEADOS
+  // ============================================================
+  async function cargarEmpleados() {
+    const tbody = document.getElementById('empleados-tbody');
+    tbody.innerHTML = '<tr><td colspan="3" class="loading">Cargando...</td></tr>';
+
+    const dias = ['', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+    const { data: empleados } = await sb.from('empleados').select('*').eq('activo', true);
+    const { data: descansos } = await sb.from('descansos').select('*').eq('tipo', 'vacaciones').eq('estado', 'aprobado');
+
+    if (!empleados) { tbody.innerHTML = '<tr><td colspan="3" class="empty">Sin empleados.</td></tr>'; return; }
+
+    tbody.innerHTML = empleados.map(e => {
+      const usados = (descansos || []).filter(d => d.empleado_id === e.id)
+        .reduce((s, d) => s + (d.dias_totales || 0), 0);
+      const disponibles = (e.dias_vacaciones_anuales || 22) - usados;
+      return `<tr>
+        <td><div class="person"><div class="avatar">${iniciales(e.nombre)}</div>${e.nombre}</div></td>
+        <td>${dias[e.dia_descanso_habitual] || '—'}</td>
+        <td>${disponibles} de ${e.dias_vacaciones_anuales || 22} días disponibles</td>
+      </tr>`;
+    }).join('');
+
+    const { data: herramientas } = await sb.from('herramientas_asignadas')
+      .select('*, empleados(nombre), gastos_y_garantias(concepto)');
+    const el = document.getElementById('herramientas-list');
+    el.innerHTML = (herramientas || []).map(h => {
+      const perdida = h.estado === 'perdida';
+      return `<div class="row ${perdida ? 'urgent' : 'ok'}">
+        <div><p class="row-title" style="${perdida ? '' : 'color:var(--text)'}">${h.gastos_y_garantias?.concepto || '—'}</p>
+        <p class="row-sub" style="${perdida ? '' : 'color:var(--text-sec)'}">${h.empleados?.nombre || '—'}${perdida ? ' · reportada perdida' : ''}</p></div>
+        ${perdida ? `<button class="btn small secondary" onclick="crearPenalizacionHerramienta('${h.id}','${h.empleado_id}')">Crear penalización</button>`
+          : '<span class="tag success">Asignada</span>'}
+      </div>`;
+    }).join('') || '<p class="empty">Sin herramientas registradas.</p>';
+  }
+
+  function crearPenalizacionHerramienta(herramientaAsignadaId, empleadoId) {
+    abrirModal(`
+      <h3>Crear penalización</h3>
+      <div class="modal-field">
+        <label>Monto (€)</label>
+        <input id="modal-monto-penalizacion" type="number" step="0.01" placeholder="45.00">
+      </div>
+      <div class="modal-field">
+        <label>Motivo (opcional)</label>
+        <input id="modal-motivo-penalizacion" type="text" placeholder="Herramienta no devuelta">
+      </div>
+      <div class="modal-actions">
+        <button class="btn secondary" onclick="cerrarModal()">Cancelar</button>
+        <button class="btn" onclick="guardarPenalizacionHerramienta('${herramientaAsignadaId}','${empleadoId}')">Registrar</button>
+      </div>
+    `);
+  }
+
+  async function guardarPenalizacionHerramienta(herramientaAsignadaId, empleadoId) {
+    const monto = parseFloat(document.getElementById('modal-monto-penalizacion').value || '0');
+    const motivo = document.getElementById('modal-motivo-penalizacion').value;
+    if (!monto) { cerrarModal(); return; }
+
+    await sb.from('penalizaciones').insert({
+      empleado_id: empleadoId, tipo: 'perdida_herramienta',
+      referencia_tabla: 'herramientas_asignadas', referencia_id: herramientaAsignadaId,
+      monto, motivo, estado: 'pendiente',
+    });
+    cerrarModal();
+    alert('Penalización registrada. Se descontará en la próxima liquidación.');
+  }
+
+  // ============================================================
+  // CONFIGURACIÓN
+  // ============================================================
+  async function cargarConfiguracion() {
+    const { data: proveedores } = await sb.from('proveedores').select('*');
+    document.getElementById('config-proveedores-tbody').innerHTML = (proveedores || []).map(p => `
+      <tr><td>${p.nombre}</td><td class="num">${p.tarifa_por_defecto ? euros(p.tarifa_por_defecto) + '/pqt' : '—'}</td></tr>
+    `).join('') || '<tr><td colspan="2" class="empty">Sin proveedores registrados.</td></tr>';
+
+    const { data: tipos } = await sb.from('tipos_paquete').select('*');
+    document.getElementById('config-tipos-tbody').innerHTML = (tipos || []).map(t => `
+      <tr><td>${t.nombre}</td><td>${t.tarifa_adicional ? '+' + euros(t.tarifa_adicional) : '—'}</td><td>${t.requiere_foto_entrega ? 'Sí' : 'No'}</td></tr>
+    `).join('') || '<tr><td colspan="3" class="empty">Sin tipos registrados.</td></tr>';
+  }
+</script>
+
+</body>
+</html>
