@@ -613,7 +613,7 @@
       sb.from('empleados').select('id, modo_transporte').eq('activo', true),
       sb.from('turnos_carga').select('entregados, incidencias, perdidos, hora_checkout, vehiculo_id').eq('fecha', hoy),
       sb.from('vehiculos').select('id, estado'),
-      sb.from('zonas_cobertura').select('id, estado').eq('fecha', hoy),
+      sb.from('zonas_cobertura').select('id, estado, codigo_postal').eq('fecha', hoy),
     ]);
 
     const totalEmpleados = (empleados || []).length;
@@ -631,6 +631,8 @@
 
     const zonasCubiertas = (zonas || []).filter(z => z.estado === 'cubierta').length;
     const zonasTotal = (zonas || []).length;
+    const codigosPostales = [...new Set((zonas || []).filter(z => z.estado === 'cubierta').map(z => z.codigo_postal))];
+    const listaCodigos = codigosPostales.length > 0 ? codigosPostales.join(', ') : 'Ninguna cubierta aún';
 
     const zonaIncompleta = zonasTotal > 0 && zonasCubiertas < zonasTotal;
 
@@ -660,11 +662,11 @@
           <p class="dash-value">${vehiculosOperativos}</p>
           <p class="dash-sub" style="${vehiculosEnTaller > 0 ? 'color:var(--danger)' : ''}">${vehiculosEnTaller > 0 ? '🔧' : '✨'} ${vehiculosEnTaller} en taller</p>
         </div>
-        <div class="dash-card" style="--dash-color:${zonaIncompleta ? 'var(--warning)' : 'var(--pink)'};">
+        <div class="dash-card" style="--dash-color:${zonaIncompleta ? 'var(--warning)' : 'var(--pink)'};cursor:pointer;" onclick="irAVista('cobertura')" title="Ver detalle de cobertura">
           <span class="dash-icon">📍</span>
           <p class="dash-label">Zonas cubiertas hoy</p>
           <p class="dash-value">${zonasCubiertas} / ${zonasTotal || '—'}</p>
-          <p class="dash-sub" style="${zonaIncompleta ? 'color:var(--warning)' : ''}">${zonaIncompleta ? '⚠️ falta cubrir alguna' : '✨ todo cubierto'}</p>
+          <p class="dash-sub" style="${zonaIncompleta ? 'color:var(--warning)' : ''}">${listaCodigos}</p>
         </div>
       </div>
     `;
