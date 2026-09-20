@@ -609,7 +609,7 @@
     document.getElementById('asignacion-fecha').textContent =
       new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
     const { data: turnos } = await sb.from('turnos_carga')
-      .select('*, empleados(nombre, modo_transporte)').eq('fecha', hoy).order('hora_checkin');
+      .select('*, empleados!turnos_carga_empleado_id_fkey(nombre, modo_transporte)').eq('fecha', hoy).order('hora_checkin');
 
     if (!turnos || turnos.length === 0) {
       tbody.innerHTML = '<tr><td colspan="7" class="empty">Nadie ha fichado hoy todavía.</td></tr>';
@@ -1129,8 +1129,4 @@
   async function alternarActivoEmpleado(empleadoId, activoActual) {
     await sb.from('empleados').update({ activo: !activoActual }).eq('id', empleadoId);
     cargarEmpleados();
-  }
-</script>
-
-</body>
-</html>
+ 
