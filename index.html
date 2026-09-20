@@ -166,6 +166,7 @@
     <div class="nav-item" data-view="iva">IVA trimestral</div>
     <div class="nav-item" data-view="reportes">Reportes</div>
     <div class="nav-item" data-view="empleados">Empleados</div>
+    <div class="nav-item" data-view="herramientas">Herramientas</div>
     <div class="nav-item" data-view="garantias">Garantías</div>
     <div class="nav-item" data-view="configuracion">Configuración</div>
     <div class="nav-item" onclick="cerrarSesion()" style="margin-top:16px;color:var(--danger);">Cerrar sesión</div>
@@ -320,9 +321,12 @@
           <tr><td colspan="8" class="empty">Conecta Supabase para ver los empleados reales.</td></tr>
         </tbody>
       </table>
+    </section>
 
-      <div style="display:flex; align-items:center; justify-content:space-between; margin:22px 0 10px;">
-        <p class="section-label" style="margin:0;">Herramientas asignadas</p>
+    <!-- HERRAMIENTAS -->
+    <section class="view" id="view-herramientas">
+      <div class="topbar">
+        <h1 class="page-title">Herramientas</h1>
         <div>
           <button class="btn small secondary" onclick="abrirModalNuevaHerramienta()">+ Registrar herramienta</button>
           <button class="btn small" onclick="abrirModalAsignarHerramienta()">+ Asignar a empleado</button>
@@ -488,6 +492,7 @@
     iva: cargarIVA,
     reportes: cargarReportes,
     empleados: cargarEmpleados,
+    herramientas: cargarHerramientas,
     garantias: cargarGarantias,
     configuracion: cargarConfiguracion,
   };
@@ -1264,7 +1269,9 @@
         </td>
       </tr>`;
     }).join('');
+  }
 
+  async function cargarHerramientas() {
     const { data: herramientas } = await sb.from('herramientas_asignadas')
       .select('*, empleados(nombre), gastos_y_garantias(concepto)')
       .in('estado', ['asignada', 'perdida'])
@@ -1288,7 +1295,7 @@
     const datos = { estado: nuevoEstado };
     if (nuevoEstado === 'devuelta') datos.fecha_devolucion = fechaLocalHoy();
     await sb.from('herramientas_asignadas').update(datos).eq('id', herramientaAsignadaId);
-    cargarEmpleados();
+    cargarHerramientas();
   }
 
   function crearPenalizacionHerramienta(herramientaAsignadaId, empleadoId) {
@@ -1707,7 +1714,7 @@
     });
     if (error) { alert('No se pudo asignar: ' + error.message); return; }
     cerrarModal();
-    cargarEmpleados();
+    cargarHerramientas();
   }
 </script>
 
