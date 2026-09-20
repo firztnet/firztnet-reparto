@@ -174,7 +174,7 @@
 
     <!-- ALERTAS -->
     <section class="view active" id="view-alertas">
-      <div class="topbar"><h1 class="page-title">Central de alertas</h1><span class="page-date">14 sep 2026</span></div>
+      <div class="topbar"><h1 class="page-title">Central de alertas</h1><span class="page-date" id="alertas-fecha"></span></div>
 
       <div id="alertas-list">
         <p class="empty">Conecta Supabase para ver las alertas reales.</p>
@@ -183,7 +183,7 @@
 
     <!-- COBERTURA -->
     <section class="view" id="view-cobertura">
-      <div class="topbar"><h1 class="page-title">Cobertura de hoy</h1><span class="page-date">14 sep 2026</span></div>
+      <div class="topbar"><h1 class="page-title">Cobertura de hoy</h1><span class="page-date" id="cobertura-fecha"></span></div>
 
       <div id="cobertura-content">
         <p class="empty">Conecta Supabase para ver la cobertura real.</p>
@@ -239,7 +239,7 @@
 
     <!-- CAJA -->
     <section class="view" id="view-caja">
-      <div class="topbar"><h1 class="page-title">Caja</h1><span class="page-date">14 sep 2026</span></div>
+      <div class="topbar"><h1 class="page-title">Caja</h1><span class="page-date" id="caja-fecha"></span></div>
 
       <div class="grid-3" style="margin-bottom:18px;" id="caja-metrics">
         <div class="card"><p class="metric-label">Salidas hoy</p><p class="metric-value">—</p></div>
@@ -324,7 +324,7 @@
         <button class="btn small" onclick="abrirModalNuevoProveedor()">+ Nuevo proveedor</button>
       </div>
       <table>
-        <thead><tr><th>Nombre</th><th class="num">Tarifa por defecto</th><th>Activo</th><th></th></tr></thead>
+        <thead><tr><th>Nombre</th><th class="num">Te paga por paquete</th><th>Activo</th><th></th></tr></thead>
         <tbody id="config-proveedores-tbody">
           <tr><td colspan="4" class="empty">Conecta Supabase para ver los proveedores reales.</td></tr>
         </tbody>
@@ -420,6 +420,11 @@
   // Fecha de HOY en la zona horaria local del navegador, no UTC.
   // new Date().toISOString() siempre convierte a UTC, lo que puede dar
   // un día distinto al que el teléfono grabó en su hora local.
+  function mostrarFechaHoy(elementId) {
+    const el = document.getElementById(elementId);
+    if (el) el.textContent = new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+  }
+
   function fechaLocalHoy() {
     const d = new Date();
     const y = d.getFullYear();
@@ -479,6 +484,7 @@
   // ALERTAS
   // ============================================================
   async function cargarAlertas() {
+    mostrarFechaHoy('alertas-fecha');
     const el = document.getElementById('alertas-list');
     el.innerHTML = '<p class="loading">Cargando alertas...</p>';
 
@@ -543,6 +549,7 @@
   // COBERTURA DEL DÍA
   // ============================================================
   async function cargarCobertura() {
+    mostrarFechaHoy('cobertura-fecha');
     const el = document.getElementById('cobertura-content');
     el.innerHTML = '<p class="loading">Cargando cobertura...</p>';
 
@@ -896,6 +903,7 @@
   // CAJA
   // ============================================================
   async function cargarCaja() {
+    mostrarFechaHoy('caja-fecha');
     const tbody = document.getElementById('caja-tbody');
     tbody.innerHTML = '<tr><td colspan="3" class="loading">Cargando...</td></tr>';
 
@@ -1174,7 +1182,7 @@
         <input id="prov-nombre" type="text" placeholder="Amazon">
       </div>
       <div class="modal-field">
-        <label>Tarifa por defecto (€ por paquete)</label>
+        <label>Lo que te paga este proveedor por paquete (€)</label>
         <input id="prov-tarifa" type="number" step="0.01" placeholder="1.50">
       </div>
       <div class="modal-actions">
@@ -1204,7 +1212,7 @@
         <input id="prov-nombre" type="text" value="${p.nombre || ''}">
       </div>
       <div class="modal-field">
-        <label>Tarifa por defecto (€ por paquete)</label>
+        <label>Lo que te paga este proveedor por paquete (€)</label>
         <input id="prov-tarifa" type="number" step="0.01" value="${p.tarifa_por_defecto ?? ''}">
       </div>
       <div class="modal-field">
