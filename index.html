@@ -184,6 +184,7 @@
     <div class="nav-item" data-view="asignacion">Fichajes de hoy</div>
     <div class="nav-item" data-view="flota">Flota y talleres</div>
     <div class="nav-item" data-view="liquidacion">Liquidación</div>
+    <div class="nav-item" data-view="adelantos">Adelantos</div>
     <div class="nav-item" data-view="caja">Caja</div>
     <div class="nav-item" data-view="iva">IVA trimestral</div>
     <div class="nav-item" data-view="reportes">Reportes</div>
@@ -270,6 +271,20 @@
       <div id="liquidacion-avisos" style="margin-top:14px;"></div>
     </section>
 
+    <!-- ADELANTOS -->
+    <section class="view" id="view-adelantos">
+      <div class="topbar">
+        <h1 class="page-title">Adelantos</h1>
+        <button class="btn small" onclick="abrirModalNuevoAdelanto()">+ Registrar adelanto</button>
+      </div>
+
+      <table>
+        <thead><tr><th>Empleado</th><th>Fecha</th><th class="num">Monto</th><th>Motivo</th><th>Estado</th><th></th></tr></thead>
+        <tbody id="adelantos-tbody">
+          <tr><td colspan="6" class="empty">Conecta Supabase para ver los adelantos reales.</td></tr>
+        </tbody>
+      </table>
+    </section>
 
     <!-- CAJA -->
     <section class="view" id="view-caja">
@@ -325,7 +340,7 @@
       <p class="section-label">Accesos rápidos</p>
       <div class="grid-2">
         <button class="btn secondary">Reporte de proveedores</button>
-        <button class="btn secondary">Resumen de adelantos</button>
+        <button class="btn secondary" onclick="irAVista('adelantos')">Resumen de adelantos</button>
       </div>
     </section>
 
@@ -384,11 +399,14 @@
         </tbody>
       </table>
 
-      <p class="section-label">Tipos de paquete</p>
+      <div style="display:flex; align-items:center; justify-content:space-between; margin:26px 0 12px;">
+        <p class="section-label" style="margin:0;">Tipos de paquete</p>
+        <button class="btn small" onclick="abrirModalNuevoTipo()">+ Nuevo tipo</button>
+      </div>
       <table>
-        <thead><tr><th>Tipo</th><th>Recargo</th><th>Foto obligatoria</th></tr></thead>
+        <thead><tr><th>Tipo</th><th>Recargo</th><th>Foto obligatoria</th><th></th></tr></thead>
         <tbody id="config-tipos-tbody">
-          <tr><td colspan="3" class="empty">Conecta Supabase para ver los tipos reales.</td></tr>
+          <tr><td colspan="4" class="empty">Conecta Supabase para ver los tipos reales.</td></tr>
         </tbody>
       </table>
 
@@ -519,6 +537,7 @@
     asignacion: cargarAsignacion,
     flota: cargarFlota,
     liquidacion: cargarLiquidacion,
+    adelantos: cargarAdelantos,
     caja: cargarCaja,
     iva: cargarIVA,
     reportes: cargarReportes,
@@ -536,14 +555,17 @@
   }
 
   document.querySelectorAll('.nav-item').forEach(item => {
-    item.addEventListener('click', () => {
-      document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-      item.classList.add('active');
-      document.getElementById('view-' + item.dataset.view).classList.add('active');
-      cargarVistaActiva();
-    });
+    item.addEventListener('click', () => irAVista(item.dataset.view));
   });
+
+  function irAVista(viewName) {
+    document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    const item = document.querySelector(`.nav-item[data-view="${viewName}"]`);
+    if (item) item.classList.add('active');
+    document.getElementById('view-' + viewName).classList.add('active');
+    cargarVistaActiva();
+  }
 
   // ============================================================
   // ALERTAS
@@ -1097,7 +1119,85 @@
     if (requiereRevision) {
       alert(`Adelanto de ${monto.toFixed(2)} € registrado. Supera los ${UMBRAL_ADELANTO_REVISION} € y queda marcado para revisión.`);
     }
-    cargarLiquidacion();
+    cargarVistaActiva();
+  }
+
+  // ------------------------------------------------------------
+  // Lista de adelantos: ver, editar y eliminar cualquier registro
+  // ------------------------------------------------------------
+  async function cargarAdelantos() {
+    const tbody = document.getElementById('adelantos-tbody');
+    tbody.innerHTML = '<tr><td colspan="6" class="loading">Cargando...</td></tr>';
+
+    const { data: adelantos } = await sb.from('anticipos')
+      .select('*, empleados(nombre)').order('fecha', { ascending: false });
+
+    if (!adelantos || adelantos.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty">Sin adelantos registrados.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = adelantos.map(a => {
+      const tag = a.estado === 'aplicado' ? '<span class="tag success">Aplicado</span>'
+        : a.requiere_revision ? '<span class="tag warning">Pendiente revisión</span>'
+        : '<span class="tag neutral">Pendiente</span>';
+      return `<tr>
+        <td>${a.empleados?.nombre || '—'}</td>
+        <td class="mono">${a.fecha}</td>
+        <td class="num">${euros(a.monto)}</td>
+        <td>${a.motivo || '—'}</td>
+        <td>${tag}</td>
+        <td>
+          <button class="btn small secondary" onclick='abrirModalEditarAdelanto(${JSON.stringify(a)})'>Editar</button>
+          <button class="btn small secondary" onclick="eliminarAdelanto('${a.id}')">Eliminar</button>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  function abrirModalEditarAdelanto(a) {
+    abrirModal(`
+      <h3>Editar adelanto</h3>
+      <div class="modal-field">
+        <label>Monto (€)</label>
+        <input id="edit-adelanto-monto" type="number" step="0.01" value="${a.monto}">
+      </div>
+      <div class="modal-field">
+        <label>Motivo</label>
+        <input id="edit-adelanto-motivo" type="text" value="${(a.motivo || '').replace(/"/g, '&quot;')}">
+      </div>
+      <div class="modal-field">
+        <label>Estado</label>
+        <select id="edit-adelanto-estado">
+          <option value="pendiente_descuento" ${a.estado === 'pendiente_descuento' ? 'selected' : ''}>Pendiente</option>
+          <option value="aplicado" ${a.estado === 'aplicado' ? 'selected' : ''}>Aplicado</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn secondary" onclick="cerrarModal()">Cancelar</button>
+        <button class="btn" onclick="guardarEdicionAdelanto('${a.id}')">Guardar</button>
+      </div>
+    `);
+  }
+
+  async function guardarEdicionAdelanto(adelantoId) {
+    const monto = parseFloat(document.getElementById('edit-adelanto-monto').value || '0');
+    const motivo = document.getElementById('edit-adelanto-motivo').value.trim();
+    const estado = document.getElementById('edit-adelanto-estado').value;
+    const requiere_revision = monto > UMBRAL_ADELANTO_REVISION;
+
+    const { error } = await sb.from('anticipos')
+      .update({ monto, motivo, estado, requiere_revision }).eq('id', adelantoId);
+    if (error) { alert('No se pudo guardar: ' + error.message); return; }
+    cerrarModal();
+    cargarAdelantos();
+  }
+
+  async function eliminarAdelanto(adelantoId) {
+    if (!confirm('¿Seguro que quieres eliminar este adelanto? Esto no se puede deshacer.')) return;
+    const { error } = await sb.from('anticipos').delete().eq('id', adelantoId);
+    if (error) { alert('No se pudo eliminar: ' + error.message); return; }
+    cargarAdelantos();
   }
 
   // ============================================================
@@ -1426,10 +1526,18 @@
       </tr>
     `).join('') || '<tr><td colspan="4" class="empty">Sin proveedores registrados.</td></tr>';
 
-    const { data: tipos } = await sb.from('tipos_paquete').select('*');
+    const { data: tipos } = await sb.from('tipos_paquete').select('*').order('nombre');
     document.getElementById('config-tipos-tbody').innerHTML = (tipos || []).map(t => `
-      <tr><td>${t.nombre}</td><td>${t.tarifa_adicional ? '+' + euros(t.tarifa_adicional) : '—'}</td><td>${t.requiere_foto_entrega ? 'Sí' : 'No'}</td></tr>
-    `).join('') || '<tr><td colspan="3" class="empty">Sin tipos registrados.</td></tr>';
+      <tr>
+        <td>${t.nombre}</td>
+        <td>${t.tarifa_adicional ? '+' + euros(t.tarifa_adicional) : '—'}</td>
+        <td>${t.requiere_foto_entrega ? 'Sí' : 'No'}</td>
+        <td>
+          <button class="btn small secondary" onclick='abrirModalEditarTipo(${JSON.stringify(t)})'>Editar</button>
+          <button class="btn small secondary" onclick="eliminarTipo('${t.id}', '${t.nombre.replace(/'/g, "\\'")}')">Eliminar</button>
+        </td>
+      </tr>
+    `).join('') || '<tr><td colspan="4" class="empty">Sin tipos registrados.</td></tr>';
   }
 
   // ------------------------------------------------------------
@@ -1510,6 +1618,92 @@
       alert('No se pudo eliminar: probablemente tiene turnos u otros registros asociados. Considera desactivarlo en vez de borrarlo.');
       return;
     }
+    cargarConfiguracion();
+  }
+
+  // ------------------------------------------------------------
+  // Gestión de tipos de paquete: crear, editar, eliminar
+  // ------------------------------------------------------------
+  function abrirModalNuevoTipo() {
+    abrirModal(`
+      <h3>Nuevo tipo de paquete</h3>
+      <div class="modal-field">
+        <label>Nombre</label>
+        <input id="tipo-nombre" type="text" placeholder="Frágil">
+      </div>
+      <div class="modal-field">
+        <label>Recargo (€, opcional)</label>
+        <input id="tipo-recargo" type="number" step="0.01" placeholder="0.30">
+      </div>
+      <div class="modal-field">
+        <label>¿Requiere foto de entrega?</label>
+        <select id="tipo-foto">
+          <option value="false">No</option>
+          <option value="true">Sí</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn secondary" onclick="cerrarModal()">Cancelar</button>
+        <button class="btn" onclick="guardarNuevoTipo()">Crear</button>
+      </div>
+    `);
+  }
+
+  async function guardarNuevoTipo() {
+    const nombre = document.getElementById('tipo-nombre').value.trim();
+    const tarifa_adicional = parseFloat(document.getElementById('tipo-recargo').value || '0') || 0;
+    const requiere_foto_entrega = document.getElementById('tipo-foto').value === 'true';
+
+    if (!nombre) { alert('Falta el nombre.'); return; }
+
+    const { error } = await sb.from('tipos_paquete').insert({ nombre, tarifa_adicional, requiere_foto_entrega });
+    if (error) { alert('No se pudo crear: ' + error.message); return; }
+    cerrarModal();
+    cargarConfiguracion();
+  }
+
+  function abrirModalEditarTipo(t) {
+    abrirModal(`
+      <h3>Editar tipo de paquete</h3>
+      <div class="modal-field">
+        <label>Nombre</label>
+        <input id="tipo-nombre" type="text" value="${t.nombre || ''}">
+      </div>
+      <div class="modal-field">
+        <label>Recargo (€, opcional)</label>
+        <input id="tipo-recargo" type="number" step="0.01" value="${t.tarifa_adicional ?? ''}">
+      </div>
+      <div class="modal-field">
+        <label>¿Requiere foto de entrega?</label>
+        <select id="tipo-foto">
+          <option value="false" ${!t.requiere_foto_entrega ? 'selected' : ''}>No</option>
+          <option value="true" ${t.requiere_foto_entrega ? 'selected' : ''}>Sí</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn secondary" onclick="cerrarModal()">Cancelar</button>
+        <button class="btn" onclick="guardarEdicionTipo('${t.id}')">Guardar</button>
+      </div>
+    `);
+  }
+
+  async function guardarEdicionTipo(tipoId) {
+    const nombre = document.getElementById('tipo-nombre').value.trim();
+    const tarifa_adicional = parseFloat(document.getElementById('tipo-recargo').value || '0') || 0;
+    const requiere_foto_entrega = document.getElementById('tipo-foto').value === 'true';
+
+    const { error } = await sb.from('tipos_paquete')
+      .update({ nombre, tarifa_adicional, requiere_foto_entrega }).eq('id', tipoId);
+    if (error) { alert('No se pudo guardar: ' + error.message); return; }
+    cerrarModal();
+    cargarConfiguracion();
+  }
+
+  async function eliminarTipo(tipoId, nombre) {
+    if (!confirm(`¿Seguro que quieres eliminar el tipo "${nombre}"?`)) return;
+
+    const { error } = await sb.from('tipos_paquete').delete().eq('id', tipoId);
+    if (error) { alert('No se pudo eliminar: ' + error.message); return; }
     cargarConfiguracion();
   }
 
