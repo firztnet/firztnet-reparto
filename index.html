@@ -157,7 +157,7 @@
 <div class="layout" id="app-layout" style="display:none;">
   <nav class="sidebar">
     <div class="brand"><div class="brand-mark"></div>Firztnet Reparto</div>
-    <div class="nav-item active" data-view="alertas">Alertas <span class="nav-badge">3</span></div>
+    <div class="nav-item active" data-view="alertas">Alertas <span class="nav-badge">0</span></div>
     <div class="nav-item" data-view="cobertura">Cobertura del día</div>
     <div class="nav-item" data-view="asignacion">Fichajes de hoy</div>
     <div class="nav-item" data-view="flota">Flota y talleres</div>
@@ -205,7 +205,10 @@
 
     <!-- FLOTA -->
     <section class="view" id="view-flota">
-      <div class="topbar"><h1 class="page-title">Flota</h1><span class="page-date">10 vehículos</span></div>
+      <div class="topbar">
+        <h1 class="page-title">Flota</h1>
+        <button class="btn small" onclick="abrirModalNuevoVehiculo()">+ Nuevo vehículo</button>
+      </div>
 
       <div class="grid-2" style="margin-bottom:16px;" id="flota-metrics">
         <div class="card"><p class="metric-label">Operativos</p><p class="metric-value">—</p></div>
@@ -213,9 +216,9 @@
       </div>
 
       <table>
-        <thead><tr><th>Vehículo</th><th>Estado</th><th>Detalle</th></tr></thead>
+        <thead><tr><th>Vehículo</th><th>Estado</th><th>Detalle</th><th></th></tr></thead>
         <tbody id="flota-tbody">
-          <tr><td colspan="3" class="empty">Conecta Supabase para ver la flota real.</td></tr>
+          <tr><td colspan="4" class="empty">Conecta Supabase para ver la flota real.</td></tr>
         </tbody>
       </table>
       <div style="margin-top:16px;"><button class="btn" onclick="registrarAveria()">Registrar avería</button></div>
@@ -522,6 +525,7 @@
 
     if (filas.length === 0) {
       el.innerHTML = '<p class="empty">Sin alertas activas.</p>';
+      document.querySelector('.nav-badge').textContent = '0';
       return;
     }
     el.innerHTML = filas.map(f => `
@@ -644,10 +648,10 @@
   // ============================================================
   async function cargarFlota() {
     const tbody = document.getElementById('flota-tbody');
-    tbody.innerHTML = '<tr><td colspan="3" class="loading">Cargando...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" class="loading">Cargando...</td></tr>';
 
     const { data: vehiculos } = await sb.from('vehiculos').select('*');
-    if (!vehiculos) { tbody.innerHTML = '<tr><td colspan="3" class="empty">Sin vehículos.</td></tr>'; return; }
+    if (!vehiculos) { tbody.innerHTML = '<tr><td colspan="4" class="empty">Sin vehículos.</td></tr>'; return; }
 
     const operativos = vehiculos.filter(v => v.estado === 'operativo').length;
     const enTaller = vehiculos.filter(v => v.estado === 'en_taller').length;
@@ -659,7 +663,13 @@
       const tag = v.estado === 'en_taller' ? '<span class="tag danger">En taller</span>'
         : v.estado === 'en_servicio_adicional' ? '<span class="tag warning">Servicio adicional</span>'
         : '<span class="tag success">Operativa</span>';
-      return `<tr><td class="mono">${v.matricula}</td><td>${tag}</td><td>${v.modelo || '—'}</td></tr>`;
+      return `<tr>
+        <td class="mono">${v.matricula}</td><td>${tag}</td><td>${v.modelo || '—'}</td>
+        <td>
+          <button class="btn small secondary" onclick='abrirModalEditarVehiculo(${JSON.stringify(v)})'>Editar</button>
+          <button class="btn small secondary" onclick="eliminarVehiculo('${v.id}', '${v.matricula}')">Eliminar</button>
+        </td>
+      </tr>`;
     }).join('');
   }
 
@@ -704,6 +714,116 @@
     });
     await sb.from('vehiculos').update({ estado: 'en_taller' }).eq('id', vehiculoId);
     cerrarModal();
+    cargarFlota();
+  }
+
+  // ------------------------------------------------------------
+  // Gestión de vehículos: crear, editar, eliminar
+  // ------------------------------------------------------------
+  function abrirModalNuevoVehiculo() {
+    abrirModal(`
+      <h3>Nuevo vehículo</h3>
+      <div class="modal-field">
+        <label>Matrícula</label>
+        <input id="veh-matricula" type="text" placeholder="3390-JBK">
+      </div>
+      <div class="modal-field">
+        <label>Modelo</label>
+        <input id="veh-modelo" type="text" placeholder="Ford Transit">
+      </div>
+      <div class="modal-field">
+        <label>Estado</label>
+        <select id="veh-estado">
+          <option value="operativo">Operativo</option>
+          <option value="en_taller">En taller</option>
+          <option value="en_servicio_adicional">En servicio adicional</option>
+        </select>
+      </div>
+      <div class="modal-field">
+        <label>Fecha ITV (opcional)</label>
+        <input id="veh-itv" type="date">
+      </div>
+      <div class="modal-field">
+        <label>Fecha seguro (opcional)</label>
+        <input id="veh-seguro" type="date">
+      </div>
+      <div class="modal-actions">
+        <button class="btn secondary" onclick="cerrarModal()">Cancelar</button>
+        <button class="btn" onclick="guardarNuevoVehiculo()">Crear</button>
+      </div>
+    `);
+  }
+
+  async function guardarNuevoVehiculo() {
+    const matricula = document.getElementById('veh-matricula').value.trim();
+    const modelo = document.getElementById('veh-modelo').value.trim();
+    const estado = document.getElementById('veh-estado').value;
+    const fecha_itv = document.getElementById('veh-itv').value || null;
+    const fecha_seguro = document.getElementById('veh-seguro').value || null;
+
+    if (!matricula) { alert('Falta la matrícula.'); return; }
+
+    const { error } = await sb.from('vehiculos').insert({ matricula, modelo, estado, fecha_itv, fecha_seguro });
+    if (error) { alert('No se pudo crear: ' + error.message); return; }
+    cerrarModal();
+    cargarFlota();
+  }
+
+  function abrirModalEditarVehiculo(v) {
+    abrirModal(`
+      <h3>Editar vehículo</h3>
+      <div class="modal-field">
+        <label>Matrícula</label>
+        <input id="veh-matricula" type="text" value="${v.matricula || ''}">
+      </div>
+      <div class="modal-field">
+        <label>Modelo</label>
+        <input id="veh-modelo" type="text" value="${v.modelo || ''}">
+      </div>
+      <div class="modal-field">
+        <label>Estado</label>
+        <select id="veh-estado">
+          <option value="operativo" ${v.estado === 'operativo' ? 'selected' : ''}>Operativo</option>
+          <option value="en_taller" ${v.estado === 'en_taller' ? 'selected' : ''}>En taller</option>
+          <option value="en_servicio_adicional" ${v.estado === 'en_servicio_adicional' ? 'selected' : ''}>En servicio adicional</option>
+        </select>
+      </div>
+      <div class="modal-field">
+        <label>Fecha ITV</label>
+        <input id="veh-itv" type="date" value="${v.fecha_itv || ''}">
+      </div>
+      <div class="modal-field">
+        <label>Fecha seguro</label>
+        <input id="veh-seguro" type="date" value="${v.fecha_seguro || ''}">
+      </div>
+      <div class="modal-actions">
+        <button class="btn secondary" onclick="cerrarModal()">Cancelar</button>
+        <button class="btn" onclick="guardarEdicionVehiculo('${v.id}')">Guardar</button>
+      </div>
+    `);
+  }
+
+  async function guardarEdicionVehiculo(vehiculoId) {
+    const matricula = document.getElementById('veh-matricula').value.trim();
+    const modelo = document.getElementById('veh-modelo').value.trim();
+    const estado = document.getElementById('veh-estado').value;
+    const fecha_itv = document.getElementById('veh-itv').value || null;
+    const fecha_seguro = document.getElementById('veh-seguro').value || null;
+
+    const { error } = await sb.from('vehiculos').update({ matricula, modelo, estado, fecha_itv, fecha_seguro }).eq('id', vehiculoId);
+    if (error) { alert('No se pudo guardar: ' + error.message); return; }
+    cerrarModal();
+    cargarFlota();
+  }
+
+  async function eliminarVehiculo(vehiculoId, matricula) {
+    if (!confirm(`¿Seguro que quieres eliminar el vehículo ${matricula}? Esto no se puede deshacer.`)) return;
+
+    const { error } = await sb.from('vehiculos').delete().eq('id', vehiculoId);
+    if (error) {
+      alert('No se pudo eliminar: probablemente tiene averías o servicios asociados en el historial. Considera marcarlo como "en_servicio_adicional" o dejarlo inactivo en vez de borrarlo.');
+      return;
+    }
     cargarFlota();
   }
 
