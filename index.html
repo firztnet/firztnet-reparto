@@ -294,19 +294,23 @@
 
     <!-- EMPLEADOS -->
     <section class="view" id="view-empleados">
-      <div class="topbar"><h1 class="page-title">Empleados</h1><span class="page-date">18 activos</span></div>
+      <div class="topbar">
+        <h1 class="page-title">Empleados</h1>
+        <button class="btn small" onclick="abrirModalNuevoEmpleado()">+ Nuevo empleado</button>
+      </div>
 
       <p class="section-label">Empleados y descanso semanal</p>
       <table>
-        <thead><tr><th>Empleado</th><th>Día de descanso</th><th>Vacaciones</th></tr></thead>
+        <thead><tr><th>Empleado</th><th>Rol</th><th>Modo</th><th>Día de descanso</th><th>Vacaciones</th><th>Estado</th><th></th></tr></thead>
         <tbody id="empleados-tbody">
-          <tr><td colspan="3" class="empty">Conecta Supabase para ver los empleados reales.</td></tr>
+          <tr><td colspan="7" class="empty">Conecta Supabase para ver los empleados reales.</td></tr>
         </tbody>
       </table>
 
       <p class="section-label">Herramientas asignadas</p>
       <div id="herramientas-list"><p class="empty">Conecta Supabase para ver las herramientas reales.</p></div>
     </section>
+
 
     <!-- CONFIGURACIÓN -->
     <section class="view" id="view-configuracion">
@@ -929,22 +933,30 @@
   // ============================================================
   async function cargarEmpleados() {
     const tbody = document.getElementById('empleados-tbody');
-    tbody.innerHTML = '<tr><td colspan="3" class="loading">Cargando...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="loading">Cargando...</td></tr>';
 
     const dias = ['', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
-    const { data: empleados } = await sb.from('empleados').select('*').eq('activo', true);
+    const { data: empleados } = await sb.from('empleados').select('*').order('activo', { ascending: false }).order('nombre');
     const { data: descansos } = await sb.from('descansos').select('*').eq('tipo', 'vacaciones').eq('estado', 'aprobado');
 
-    if (!empleados) { tbody.innerHTML = '<tr><td colspan="3" class="empty">Sin empleados.</td></tr>'; return; }
+    if (!empleados) { tbody.innerHTML = '<tr><td colspan="7" class="empty">Sin empleados.</td></tr>'; return; }
 
     tbody.innerHTML = empleados.map(e => {
       const usados = (descansos || []).filter(d => d.empleado_id === e.id)
         .reduce((s, d) => s + (d.dias_totales || 0), 0);
       const disponibles = (e.dias_vacaciones_anuales || 22) - usados;
+      const estadoTag = e.activo ? '<span class="tag success">Activo</span>' : '<span class="tag neutral">Inactivo</span>';
       return `<tr>
         <td><div class="person"><div class="avatar">${iniciales(e.nombre)}</div>${e.nombre}</div></td>
+        <td>${e.rol}</td>
+        <td>${e.modo_transporte === 'a_pie' ? 'A pie' : 'Furgoneta'}</td>
         <td>${dias[e.dia_descanso_habitual] || '—'}</td>
-        <td>${disponibles} de ${e.dias_vacaciones_anuales || 22} días disponibles</td>
+        <td>${disponibles} de ${e.dias_vacaciones_anuales || 22} días</td>
+        <td>${estadoTag}</td>
+        <td>
+          <button class="btn small secondary" onclick="abrirModalCambiarPin('${e.id}')">PIN</button>
+          <button class="btn small secondary" onclick="alternarActivoEmpleado('${e.id}', ${e.activo})">${e.activo ? 'Desactivar' : 'Activar'}</button>
+        </td>
       </tr>`;
     }).join('');
 
@@ -1006,7 +1018,103 @@
     const { data: tipos } = await sb.from('tipos_paquete').select('*');
     document.getElementById('config-tipos-tbody').innerHTML = (tipos || []).map(t => `
       <tr><td>${t.nombre}</td><td>${t.tarifa_adicional ? '+' + euros(t.tarifa_adicional) : '—'}</td><td>${t.requiere_foto_entrega ? 'Sí' : 'No'}</td></tr>
-    `).join('') || '<tr><td colspan="3" class="empty">Sin tipos registrados.</td></tr>';
+  // ============================================================
+  // GESTIÓN DE EMPLEADOS: alta, cambio de PIN, activar/desactivar
+  // ============================================================
+  function abrirModalNuevoEmpleado() {
+    abrirModal(`
+      <h3>Nuevo empleado</h3>
+      <div class="modal-field">
+        <label>Nombre completo</label>
+        <input id="nuevo-nombre" type="text" placeholder="Ana Torres">
+      </div>
+      <div class="modal-field">
+        <label>PIN (4 a 6 dígitos)</label>
+        <input id="nuevo-pin" type="text" maxlength="6" placeholder="1234">
+      </div>
+      <div class="modal-field">
+        <label>Rol</label>
+        <select id="nuevo-rol">
+          <option value="repartidor">Repartidor</option>
+          <option value="supervisor_zona">Supervisor de zona</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+      <div class="modal-field">
+        <label>Modo de transporte</label>
+        <select id="nuevo-modo">
+          <option value="a_pie">A pie</option>
+          <option value="furgoneta">Furgoneta</option>
+        </select>
+      </div>
+      <div class="modal-field">
+        <label>Día de descanso semanal</label>
+        <select id="nuevo-descanso">
+          <option value="1">Lunes</option>
+          <option value="2">Martes</option>
+          <option value="3">Miércoles</option>
+          <option value="4">Jueves</option>
+          <option value="5">Viernes</option>
+          <option value="6">Sábado</option>
+          <option value="7" selected>Domingo</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn secondary" onclick="cerrarModal()">Cancelar</button>
+        <button class="btn" onclick="guardarNuevoEmpleado()">Crear</button>
+      </div>
+    `);
+  }
+
+  async function guardarNuevoEmpleado() {
+    const nombre = document.getElementById('nuevo-nombre').value.trim();
+    const pin = document.getElementById('nuevo-pin').value.trim();
+    const rol = document.getElementById('nuevo-rol').value;
+    const modo = document.getElementById('nuevo-modo').value;
+    const descanso = parseInt(document.getElementById('nuevo-descanso').value, 10);
+
+    if (!nombre || pin.length < 4) {
+      alert('Falta el nombre o el PIN (mínimo 4 dígitos).');
+      return;
+    }
+
+    const { error } = await sb.rpc('crear_empleado', {
+      p_nombre: nombre, p_pin: pin, p_rol: rol,
+      p_modo_transporte: modo, p_dia_descanso_habitual: descanso,
+    });
+
+    if (error) { alert('No se pudo crear: ' + error.message); return; }
+    cerrarModal();
+    cargarEmpleados();
+  }
+
+  function abrirModalCambiarPin(empleadoId) {
+    abrirModal(`
+      <h3>Cambiar PIN</h3>
+      <div class="modal-field">
+        <label>Nuevo PIN (4 a 6 dígitos)</label>
+        <input id="cambio-pin" type="text" maxlength="6" placeholder="1234">
+      </div>
+      <div class="modal-actions">
+        <button class="btn secondary" onclick="cerrarModal()">Cancelar</button>
+        <button class="btn" onclick="guardarCambioPin('${empleadoId}')">Guardar</button>
+      </div>
+    `);
+  }
+
+  async function guardarCambioPin(empleadoId) {
+    const pin = document.getElementById('cambio-pin').value.trim();
+    if (pin.length < 4) { alert('El PIN debe tener al menos 4 dígitos.'); return; }
+
+    const { error } = await sb.rpc('establecer_pin', { p_empleado_id: empleadoId, p_pin: pin });
+    if (error) { alert('No se pudo cambiar: ' + error.message); return; }
+    cerrarModal();
+    alert('PIN actualizado.');
+  }
+
+  async function alternarActivoEmpleado(empleadoId, activoActual) {
+    await sb.from('empleados').update({ activo: !activoActual }).eq('id', empleadoId);
+    cargarEmpleados();
   }
 </script>
 
