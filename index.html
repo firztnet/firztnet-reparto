@@ -1129,4 +1129,8 @@
   async function alternarActivoEmpleado(empleadoId, activoActual) {
     await sb.from('empleados').update({ activo: !activoActual }).eq('id', empleadoId);
     cargarEmpleados();
- 
+  }
+</script>
+
+</body>
+</html>
