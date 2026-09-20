@@ -166,6 +166,7 @@
     <div class="nav-item" data-view="iva">IVA trimestral</div>
     <div class="nav-item" data-view="reportes">Reportes</div>
     <div class="nav-item" data-view="empleados">Empleados</div>
+    <div class="nav-item" data-view="garantias">Garantías</div>
     <div class="nav-item" data-view="configuracion">Configuración</div>
     <div class="nav-item" onclick="cerrarSesion()" style="margin-top:16px;color:var(--danger);">Cerrar sesión</div>
   </nav>
@@ -330,6 +331,17 @@
       <div id="herramientas-list"><p class="empty">Conecta Supabase para ver las herramientas reales.</p></div>
     </section>
 
+    <!-- GARANTÍAS -->
+    <section class="view" id="view-garantias">
+      <div class="topbar"><h1 class="page-title">Garantías y compras</h1></div>
+
+      <table>
+        <thead><tr><th>Concepto</th><th>Categoría</th><th>Comprado</th><th>Vence garantía</th><th>Estado</th></tr></thead>
+        <tbody id="garantias-tbody">
+          <tr><td colspan="5" class="empty">Conecta Supabase para ver las garantías reales.</td></tr>
+        </tbody>
+      </table>
+    </section>
 
     <!-- CONFIGURACIÓN -->
     <section class="view" id="view-configuracion">
@@ -476,6 +488,7 @@
     iva: cargarIVA,
     reportes: cargarReportes,
     empleados: cargarEmpleados,
+    garantias: cargarGarantias,
     configuracion: cargarConfiguracion,
   };
 
@@ -1313,6 +1326,46 @@
   // ============================================================
   // CONFIGURACIÓN
   // ============================================================
+  // ============================================================
+  // GARANTÍAS Y COMPRAS
+  // ============================================================
+  async function cargarGarantias() {
+    const tbody = document.getElementById('garantias-tbody');
+    tbody.innerHTML = '<tr><td colspan="5" class="loading">Cargando...</td></tr>';
+
+    const { data: garantias } = await sb.from('gastos_y_garantias')
+      .select('*').not('meses_garantia', 'is', null)
+      .order('fecha_fin_garantia', { ascending: true });
+
+    if (!garantias || garantias.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" class="empty">Sin compras con garantía registrada.</td></tr>';
+      return;
+    }
+
+    const hoy = fechaLocalHoy();
+    const categorias = { herramienta_repartidor: 'Herramienta', repuesto_vehiculo: 'Repuesto vehículo', otro: 'Otro' };
+
+    tbody.innerHTML = garantias.map(g => {
+      const vencida = g.fecha_fin_garantia && g.fecha_fin_garantia < hoy;
+      const diasRestantes = g.fecha_fin_garantia
+        ? Math.floor((new Date(g.fecha_fin_garantia) - new Date(hoy)) / 86400000)
+        : null;
+      const proximaAVencer = !vencida && diasRestantes !== null && diasRestantes <= 30;
+
+      let tag = '<span class="tag success">En garantía</span>';
+      if (vencida) tag = '<span class="tag danger">Vencida</span>';
+      else if (proximaAVencer) tag = `<span class="tag warning">Vence en ${diasRestantes} días</span>`;
+
+      return `<tr>
+        <td>${g.concepto}</td>
+        <td>${categorias[g.categoria] || g.categoria}</td>
+        <td class="mono">${g.fecha_compra || '—'}</td>
+        <td class="mono">${g.fecha_fin_garantia || '—'}</td>
+        <td>${tag}</td>
+      </tr>`;
+    }).join('');
+  }
+
   async function cargarConfiguracion() {
     const { data: proveedores } = await sb.from('proveedores').select('*').order('nombre');
     document.getElementById('config-proveedores-tbody').innerHTML = (proveedores || []).map(p => `
