@@ -475,8 +475,17 @@
   function cerrarModal() {
     document.getElementById('modal-overlay').classList.remove('active');
   }
+  // Solo cierra si el clic EMPEZÓ y TERMINÓ en el fondo oscuro (no en
+  // el formulario). Evita cierres accidentales al usar un <select>,
+  // donde algunos navegadores disparan un clic "fantasma" al fondo
+  // cuando se cierra el desplegable nativo.
+  let _modalMousedownEnFondo = false;
+  document.getElementById('modal-overlay').addEventListener('mousedown', (e) => {
+    _modalMousedownEnFondo = (e.target.id === 'modal-overlay');
+  });
   document.getElementById('modal-overlay').addEventListener('click', (e) => {
-    if (e.target.id === 'modal-overlay') cerrarModal();
+    if (_modalMousedownEnFondo && e.target.id === 'modal-overlay') cerrarModal();
+    _modalMousedownEnFondo = false;
   });
 
   // ============================================================
