@@ -16,6 +16,9 @@
     --success:#2E7D5B; --success-bg:#E7F3EC;
     --warning:#B8730F; --warning-bg:#FBF0DD;
     --danger:#C0392B; --danger-bg:#FBEAE8;
+    --teal:#0F7C7C; --teal-bg:#E1F3F3;
+    --purple:#6B4C9A; --purple-bg:#EDE7F6;
+    --pink:#B23A6B; --pink-bg:#FAE7EF;
     --radius:10px;
   }
   *{box-sizing:border-box;}
@@ -47,6 +50,19 @@
   .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
 
   .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;}
+
+  .dash-card{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:14px;
+    padding:18px 18px 16px;overflow:hidden;transition:transform .18s ease, box-shadow .18s ease;}
+  .dash-card:hover{transform:translateY(-3px);box-shadow:0 10px 24px -8px rgba(28,36,48,0.18);}
+  .dash-card::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:var(--dash-color, var(--accent));}
+  .dash-icon{font-size:22px;margin-bottom:8px;display:block;}
+  .dash-value{font-size:30px;font-weight:600;font-family:'IBM Plex Mono',monospace;margin:2px 0;
+    color:var(--dash-color, var(--text));}
+  .dash-label{font-size:12.5px;color:var(--text-sec);font-weight:500;}
+  .dash-sub{font-size:11.5px;color:var(--text-muted);margin-top:6px;}
+  .grid-5{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;}
+  @media (max-width: 1000px){.grid-5{grid-template-columns:repeat(2,1fr);}}
+  @media (max-width: 480px){.grid-5{grid-template-columns:1fr;}}
   .metric-label{font-size:12.5px;color:var(--text-sec);margin:0 0 6px;}
   .metric-value{font-size:24px;font-weight:600;margin:0;font-family:'IBM Plex Mono',monospace;}
 
@@ -556,31 +572,39 @@
     const zonasCubiertas = (zonas || []).filter(z => z.estado === 'cubierta').length;
     const zonasTotal = (zonas || []).length;
 
+    const zonaIncompleta = zonasTotal > 0 && zonasCubiertas < zonasTotal;
+
     el.innerHTML = `
-      <div class="grid-3">
-        <div class="card" style="background:var(--accent-bg);border-color:#C7D6E8;">
-          <p class="metric-label" style="color:var(--accent)">Empleados activos</p>
-          <p class="metric-value" style="color:var(--accent)">${totalEmpleados}</p>
-          <p style="font-size:11.5px;color:var(--accent);margin:4px 0 0;">${aPie} a pie · ${enFurgoneta} en furgoneta</p>
+      <div class="grid-5">
+        <div class="dash-card" style="--dash-color:var(--accent);">
+          <span class="dash-icon">👥</span>
+          <p class="dash-label">Empleados activos</p>
+          <p class="dash-value">${totalEmpleados}</p>
+          <p class="dash-sub">🚶 ${aPie} a pie · 🚐 ${enFurgoneta} en furgoneta</p>
         </div>
-        <div class="card" style="background:var(--success-bg);border-color:#B7DAC7;">
-          <p class="metric-label" style="color:var(--success)">Repartiendo ahora</p>
-          <p class="metric-value" style="color:var(--success)">${enRuta}</p>
-          <p style="font-size:11.5px;color:var(--success);margin:4px 0 0;">${vehiculosEnReparto} furgoneta(s) en calle</p>
+        <div class="dash-card" style="--dash-color:var(--success);">
+          <span class="dash-icon">📦</span>
+          <p class="dash-label">Repartiendo ahora</p>
+          <p class="dash-value">${enRuta}</p>
+          <p class="dash-sub">🚐 ${vehiculosEnReparto} furgoneta(s) en calle</p>
         </div>
-        <div class="card">
-          <p class="metric-label">Entregados hoy</p>
-          <p class="metric-value">${entregadosHoy}</p>
-          <p style="font-size:11.5px;color:${incidenciasHoy > 0 ? 'var(--danger)' : 'var(--text-sec)'};margin:4px 0 0;">${incidenciasHoy} incidencias/pérdidas</p>
+        <div class="dash-card" style="--dash-color:var(--teal);">
+          <span class="dash-icon">✅</span>
+          <p class="dash-label">Entregados hoy</p>
+          <p class="dash-value">${entregadosHoy}</p>
+          <p class="dash-sub" style="${incidenciasHoy > 0 ? 'color:var(--danger)' : ''}">${incidenciasHoy > 0 ? '⚠️' : '✨'} ${incidenciasHoy} incidencias/pérdidas</p>
         </div>
-        <div class="card">
-          <p class="metric-label">Flota operativa</p>
-          <p class="metric-value">${vehiculosOperativos}</p>
-          <p style="font-size:11.5px;color:${vehiculosEnTaller > 0 ? 'var(--danger)' : 'var(--text-sec)'};margin:4px 0 0;">${vehiculosEnTaller} en taller</p>
+        <div class="dash-card" style="--dash-color:var(--purple);">
+          <span class="dash-icon">🚚</span>
+          <p class="dash-label">Flota operativa</p>
+          <p class="dash-value">${vehiculosOperativos}</p>
+          <p class="dash-sub" style="${vehiculosEnTaller > 0 ? 'color:var(--danger)' : ''}">${vehiculosEnTaller > 0 ? '🔧' : '✨'} ${vehiculosEnTaller} en taller</p>
         </div>
-        <div class="card" style="background:${zonasTotal > 0 && zonasCubiertas < zonasTotal ? 'var(--warning-bg)' : 'var(--surface)'};border-color:${zonasTotal > 0 && zonasCubiertas < zonasTotal ? '#E9CC9B' : 'var(--border)'};">
-          <p class="metric-label" style="${zonasTotal > 0 && zonasCubiertas < zonasTotal ? 'color:var(--warning)' : ''}">Zonas cubiertas hoy</p>
-          <p class="metric-value" style="${zonasTotal > 0 && zonasCubiertas < zonasTotal ? 'color:var(--warning)' : ''}">${zonasCubiertas} / ${zonasTotal || '—'}</p>
+        <div class="dash-card" style="--dash-color:${zonaIncompleta ? 'var(--warning)' : 'var(--pink)'};">
+          <span class="dash-icon">📍</span>
+          <p class="dash-label">Zonas cubiertas hoy</p>
+          <p class="dash-value">${zonasCubiertas} / ${zonasTotal || '—'}</p>
+          <p class="dash-sub" style="${zonaIncompleta ? 'color:var(--warning)' : ''}">${zonaIncompleta ? '⚠️ falta cubrir alguna' : '✨ todo cubierto'}</p>
         </div>
       </div>
     `;
