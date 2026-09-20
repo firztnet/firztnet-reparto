@@ -176,10 +176,16 @@
     <section class="view active" id="view-alertas">
       <div class="topbar"><h1 class="page-title">Central de alertas</h1><span class="page-date" id="alertas-fecha"></span></div>
 
+      <div id="resumen-dashboard" style="margin-bottom:22px;">
+        <p class="loading">Cargando resumen...</p>
+      </div>
+
+      <p class="section-label" style="margin-top:0;">Alertas</p>
       <div id="alertas-list">
         <p class="empty">Conecta Supabase para ver las alertas reales.</p>
       </div>
     </section>
+
 
     <!-- COBERTURA -->
     <section class="view" id="view-cobertura">
@@ -487,8 +493,69 @@
   // ============================================================
   // ALERTAS
   // ============================================================
+  // ============================================================
+  // RESUMEN EN VIVO (tarjetas de la pantalla principal)
+  // ============================================================
+  async function cargarResumenDashboard() {
+    const el = document.getElementById('resumen-dashboard');
+    const hoy = fechaLocalHoy();
+
+    const [{ data: empleados }, { data: turnos }, { data: vehiculos }, { data: zonas }] = await Promise.all([
+      sb.from('empleados').select('id, modo_transporte').eq('activo', true),
+      sb.from('turnos_carga').select('entregados, incidencias, perdidos, hora_checkout, vehiculo_id').eq('fecha', hoy),
+      sb.from('vehiculos').select('id, estado'),
+      sb.from('zonas_cobertura').select('id, estado').eq('fecha', hoy),
+    ]);
+
+    const totalEmpleados = (empleados || []).length;
+    const aPie = (empleados || []).filter(e => e.modo_transporte === 'a_pie').length;
+    const enFurgoneta = totalEmpleados - aPie;
+
+    const enRuta = (turnos || []).filter(t => !t.hora_checkout).length;
+    const vehiculosEnReparto = new Set((turnos || []).filter(t => !t.hora_checkout && t.vehiculo_id).map(t => t.vehiculo_id)).size;
+
+    const entregadosHoy = (turnos || []).reduce((s, t) => s + (t.entregados || 0), 0);
+    const incidenciasHoy = (turnos || []).reduce((s, t) => s + (t.incidencias || 0) + (t.perdidos || 0), 0);
+
+    const vehiculosOperativos = (vehiculos || []).filter(v => v.estado === 'operativo').length;
+    const vehiculosEnTaller = (vehiculos || []).filter(v => v.estado === 'en_taller').length;
+
+    const zonasCubiertas = (zonas || []).filter(z => z.estado === 'cubierta').length;
+    const zonasTotal = (zonas || []).length;
+
+    el.innerHTML = `
+      <div class="grid-3">
+        <div class="card" style="background:var(--accent-bg);border-color:#C7D6E8;">
+          <p class="metric-label" style="color:var(--accent)">Empleados activos</p>
+          <p class="metric-value" style="color:var(--accent)">${totalEmpleados}</p>
+          <p style="font-size:11.5px;color:var(--accent);margin:4px 0 0;">${aPie} a pie · ${enFurgoneta} en furgoneta</p>
+        </div>
+        <div class="card" style="background:var(--success-bg);border-color:#B7DAC7;">
+          <p class="metric-label" style="color:var(--success)">Repartiendo ahora</p>
+          <p class="metric-value" style="color:var(--success)">${enRuta}</p>
+          <p style="font-size:11.5px;color:var(--success);margin:4px 0 0;">${vehiculosEnReparto} furgoneta(s) en calle</p>
+        </div>
+        <div class="card">
+          <p class="metric-label">Entregados hoy</p>
+          <p class="metric-value">${entregadosHoy}</p>
+          <p style="font-size:11.5px;color:${incidenciasHoy > 0 ? 'var(--danger)' : 'var(--text-sec)'};margin:4px 0 0;">${incidenciasHoy} incidencias/pérdidas</p>
+        </div>
+        <div class="card">
+          <p class="metric-label">Flota operativa</p>
+          <p class="metric-value">${vehiculosOperativos}</p>
+          <p style="font-size:11.5px;color:${vehiculosEnTaller > 0 ? 'var(--danger)' : 'var(--text-sec)'};margin:4px 0 0;">${vehiculosEnTaller} en taller</p>
+        </div>
+        <div class="card" style="background:${zonasTotal > 0 && zonasCubiertas < zonasTotal ? 'var(--warning-bg)' : 'var(--surface)'};border-color:${zonasTotal > 0 && zonasCubiertas < zonasTotal ? '#E9CC9B' : 'var(--border)'};">
+          <p class="metric-label" style="${zonasTotal > 0 && zonasCubiertas < zonasTotal ? 'color:var(--warning)' : ''}">Zonas cubiertas hoy</p>
+          <p class="metric-value" style="${zonasTotal > 0 && zonasCubiertas < zonasTotal ? 'color:var(--warning)' : ''}">${zonasCubiertas} / ${zonasTotal || '—'}</p>
+        </div>
+      </div>
+    `;
+  }
+
   async function cargarAlertas() {
     mostrarFechaHoy('alertas-fecha');
+    cargarResumenDashboard();
     const el = document.getElementById('alertas-list');
     el.innerHTML = '<p class="loading">Cargando alertas...</p>';
 
