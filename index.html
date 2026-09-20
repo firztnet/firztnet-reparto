@@ -226,7 +226,10 @@
 
     <!-- LIQUIDACIÓN -->
     <section class="view" id="view-liquidacion">
-      <div class="topbar"><h1 class="page-title">Liquidación semanal</h1><span class="page-date">8-14 sep</span></div>
+      <div class="topbar">
+        <h1 class="page-title">Liquidación</h1>
+        <button class="btn small" onclick="abrirModalNuevoAdelanto()">+ Registrar adelanto</button>
+      </div>
 
       <table>
         <thead><tr><th>Empleado</th><th class="num">Entregas</th><th class="num">Bruto</th><th class="num">Adelantos</th><th class="num">Penalizaciones</th><th class="num">Neto</th><th></th></tr></thead>
@@ -236,6 +239,7 @@
       </table>
       <div id="liquidacion-avisos" style="margin-top:14px;"></div>
     </section>
+
 
     <!-- CAJA -->
     <section class="view" id="view-caja">
@@ -896,6 +900,73 @@
       .eq('empleado_id', empleadoId).eq('estado', 'pendiente_descuento');
     await sb.from('penalizaciones').update({ estado: 'aplicada' })
       .eq('empleado_id', empleadoId).eq('estado', 'pendiente');
+    cargarLiquidacion();
+  }
+
+  // ------------------------------------------------------------
+  // Registrar un adelanto (queda pendiente de descuento en la
+  // próxima liquidación, y si supera el umbral queda marcado para
+  // revisión en vez de aplicarse directo)
+  // ------------------------------------------------------------
+  async function abrirModalNuevoAdelanto() {
+    const { data: empleados } = await sb.from('empleados').select('id, nombre').eq('activo', true).order('nombre');
+    abrirModal(`
+      <h3>Registrar adelanto</h3>
+      <div class="modal-field">
+        <label>Empleado</label>
+        <select id="adelanto-empleado">
+          ${(empleados || []).map(e => `<option value="${e.id}">${e.nombre}</option>`).join('')}
+        </select>
+      </div>
+      <div class="modal-field">
+        <label>Monto (€)</label>
+        <input id="adelanto-monto" type="number" step="0.01" placeholder="50.00">
+      </div>
+      <div class="modal-field">
+        <label>Motivo (opcional)</label>
+        <input id="adelanto-motivo" type="text" placeholder="Gasolina / emergencia">
+      </div>
+      <div class="modal-field">
+        <label>Método de pago</label>
+        <select id="adelanto-metodo">
+          <option value="efectivo">Efectivo</option>
+          <option value="transferencia">Transferencia</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn secondary" onclick="cerrarModal()">Cancelar</button>
+        <button class="btn" onclick="guardarNuevoAdelanto()">Registrar</button>
+      </div>
+    `);
+  }
+
+  async function guardarNuevoAdelanto() {
+    const empleadoId = document.getElementById('adelanto-empleado').value;
+    const monto = parseFloat(document.getElementById('adelanto-monto').value || '0');
+    const motivo = document.getElementById('adelanto-motivo').value.trim();
+    const metodo = document.getElementById('adelanto-metodo').value;
+
+    if (!empleadoId || !monto) { alert('Falta el empleado o el monto.'); return; }
+
+    const requiereRevision = monto > UMBRAL_ADELANTO_REVISION;
+
+    const { data: anticipo, error } = await sb.from('anticipos').insert({
+      empleado_id: empleadoId, monto, motivo,
+      estado: 'pendiente_descuento', requiere_revision: requiereRevision,
+    }).select().single();
+
+    if (error) { alert('No se pudo registrar: ' + error.message); return; }
+
+    // Refleja el mismo movimiento en caja, vinculado a este anticipo.
+    await sb.from('caja_movimientos').insert({
+      categoria: 'adelanto', tipo_movimiento: 'salida', monto,
+      metodo_pago: metodo, referencia_tabla: 'anticipos', referencia_id: anticipo.id,
+    });
+
+    cerrarModal();
+    if (requiereRevision) {
+      alert(`Adelanto de ${monto.toFixed(2)} € registrado. Supera los ${UMBRAL_ADELANTO_REVISION} € y queda marcado para revisión.`);
+    }
     cargarLiquidacion();
   }
 
