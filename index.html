@@ -411,6 +411,17 @@
     return nombre.split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase();
   }
 
+  // Fecha de HOY en la zona horaria local del navegador, no UTC.
+  // new Date().toISOString() siempre convierte a UTC, lo que puede dar
+  // un día distinto al que el teléfono grabó en su hora local.
+  function fechaLocalHoy() {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const dia = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${dia}`;
+  }
+
   // ------------------------------------------------------------
   // Modal reutilizable
   // ------------------------------------------------------------
@@ -528,7 +539,7 @@
     const el = document.getElementById('cobertura-content');
     el.innerHTML = '<p class="loading">Cargando cobertura...</p>';
 
-    const hoy = new Date().toISOString().split('T')[0];
+    const hoy = fechaLocalHoy();
     const { data: zonas } = await sb.from('zonas_cobertura')
       .select('*, empleados(nombre)').eq('fecha', hoy);
 
@@ -594,7 +605,7 @@
     const tbody = document.getElementById('asignacion-tbody');
     tbody.innerHTML = '<tr><td colspan="7" class="loading">Cargando...</td></tr>';
 
-    const hoy = new Date().toISOString().split('T')[0];
+    const hoy = fechaLocalHoy();
     document.getElementById('asignacion-fecha').textContent =
       new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
     const { data: turnos } = await sb.from('turnos_carga')
@@ -688,7 +699,7 @@
     const iva = parseFloat(document.getElementById('modal-iva').value || '0');
 
     await sb.from('talleres_flota').insert({
-      vehiculo_id: vehiculoId, fecha_entrada: new Date().toISOString().split('T')[0],
+      vehiculo_id: vehiculoId, fecha_entrada: fechaLocalHoy(),
       averia, base_imponible: base, iva,
     });
     await sb.from('vehiculos').update({ estado: 'en_taller' }).eq('id', vehiculoId);
@@ -765,7 +776,7 @@
     const tbody = document.getElementById('caja-tbody');
     tbody.innerHTML = '<tr><td colspan="3" class="loading">Cargando...</td></tr>';
 
-    const hoy = new Date().toISOString().split('T')[0];
+    const hoy = fechaLocalHoy();
     const inicioMes = new Date(); inicioMes.setDate(1);
 
     const { data: movimientos } = await sb.from('caja_movimientos').select('*').order('fecha', { ascending: false }).limit(30);
@@ -1018,6 +1029,9 @@
     const { data: tipos } = await sb.from('tipos_paquete').select('*');
     document.getElementById('config-tipos-tbody').innerHTML = (tipos || []).map(t => `
       <tr><td>${t.nombre}</td><td>${t.tarifa_adicional ? '+' + euros(t.tarifa_adicional) : '—'}</td><td>${t.requiere_foto_entrega ? 'Sí' : 'No'}</td></tr>
+    `).join('') || '<tr><td colspan="3" class="empty">Sin tipos registrados.</td></tr>';
+  }
+
   // ============================================================
   // GESTIÓN DE EMPLEADOS: alta, cambio de PIN, activar/desactivar
   // ============================================================
