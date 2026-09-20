@@ -320,7 +320,13 @@
         </tbody>
       </table>
 
-      <p class="section-label">Herramientas asignadas</p>
+      <div style="display:flex; align-items:center; justify-content:space-between; margin:22px 0 10px;">
+        <p class="section-label" style="margin:0;">Herramientas asignadas</p>
+        <div>
+          <button class="btn small secondary" onclick="abrirModalNuevaHerramienta()">+ Registrar herramienta</button>
+          <button class="btn small" onclick="abrirModalAsignarHerramienta()">+ Asignar a empleado</button>
+        </div>
+      </div>
       <div id="herramientas-list"><p class="empty">Conecta Supabase para ver las herramientas reales.</p></div>
     </section>
 
@@ -1247,17 +1253,29 @@
     }).join('');
 
     const { data: herramientas } = await sb.from('herramientas_asignadas')
-      .select('*, empleados(nombre), gastos_y_garantias(concepto)');
+      .select('*, empleados(nombre), gastos_y_garantias(concepto)')
+      .in('estado', ['asignada', 'perdida'])
+      .order('fecha_asignacion', { ascending: false });
     const el = document.getElementById('herramientas-list');
     el.innerHTML = (herramientas || []).map(h => {
       const perdida = h.estado === 'perdida';
       return `<div class="row ${perdida ? 'urgent' : 'ok'}">
         <div><p class="row-title" style="${perdida ? '' : 'color:var(--text)'}">${h.gastos_y_garantias?.concepto || '—'}</p>
         <p class="row-sub" style="${perdida ? '' : 'color:var(--text-sec)'}">${h.empleados?.nombre || '—'}${perdida ? ' · reportada perdida' : ''}</p></div>
-        ${perdida ? `<button class="btn small secondary" onclick="crearPenalizacionHerramienta('${h.id}','${h.empleado_id}')">Crear penalización</button>`
-          : '<span class="tag success">Asignada</span>'}
+        <div>
+          ${perdida ? `<button class="btn small secondary" onclick="crearPenalizacionHerramienta('${h.id}','${h.empleado_id}')">Crear penalización</button>`
+            : `<button class="btn small secondary" onclick="marcarHerramienta('${h.id}', 'devuelta')">Devuelta</button>
+               <button class="btn small secondary" onclick="marcarHerramienta('${h.id}', 'perdida')">Perdida</button>`}
+        </div>
       </div>`;
-    }).join('') || '<p class="empty">Sin herramientas registradas.</p>';
+    }).join('') || '<p class="empty">Sin herramientas asignadas actualmente.</p>';
+  }
+
+  async function marcarHerramienta(herramientaAsignadaId, nuevoEstado) {
+    const datos = { estado: nuevoEstado };
+    if (nuevoEstado === 'devuelta') datos.fecha_devolucion = fechaLocalHoy();
+    await sb.from('herramientas_asignadas').update(datos).eq('id', herramientaAsignadaId);
+    cargarEmpleados();
   }
 
   function crearPenalizacionHerramienta(herramientaAsignadaId, empleadoId) {
@@ -1535,6 +1553,106 @@
     });
     if (error) { alert('No se pudo guardar: ' + error.message); return; }
 
+    cerrarModal();
+    cargarEmpleados();
+  }
+
+  // ------------------------------------------------------------
+  // Registrar la compra de una herramienta/repuesto (con garantía)
+  // y luego asignarla a un empleado — dos pasos separados, igual
+  // que se diseñó desde el principio.
+  // ------------------------------------------------------------
+  function abrirModalNuevaHerramienta() {
+    abrirModal(`
+      <h3>Registrar herramienta</h3>
+      <div class="modal-field">
+        <label>Concepto</label>
+        <input id="herr-concepto" type="text" placeholder="Carretilla plegable">
+      </div>
+      <div class="modal-field">
+        <label>Categoría</label>
+        <select id="herr-categoria">
+          <option value="herramienta_repartidor">Herramienta del repartidor</option>
+          <option value="repuesto_vehiculo">Repuesto de vehículo</option>
+          <option value="otro">Otro</option>
+        </select>
+      </div>
+      <div class="modal-field">
+        <label>Base imponible (€)</label>
+        <input id="herr-base" type="number" step="0.01" placeholder="120.00">
+      </div>
+      <div class="modal-field">
+        <label>IVA (€)</label>
+        <input id="herr-iva" type="number" step="0.01" placeholder="25.20">
+      </div>
+      <div class="modal-field">
+        <label>Meses de garantía (opcional)</label>
+        <input id="herr-garantia" type="number" placeholder="24">
+      </div>
+      <div class="modal-actions">
+        <button class="btn secondary" onclick="cerrarModal()">Cancelar</button>
+        <button class="btn" onclick="guardarNuevaHerramienta()">Registrar</button>
+      </div>
+    `);
+  }
+
+  async function guardarNuevaHerramienta() {
+    const concepto = document.getElementById('herr-concepto').value.trim();
+    const categoria = document.getElementById('herr-categoria').value;
+    const base_imponible = parseFloat(document.getElementById('herr-base').value || '0');
+    const iva = parseFloat(document.getElementById('herr-iva').value || '0');
+    const meses_garantia = document.getElementById('herr-garantia').value ? parseInt(document.getElementById('herr-garantia').value, 10) : null;
+
+    if (!concepto) { alert('Falta el concepto.'); return; }
+
+    const { error } = await sb.from('gastos_y_garantias').insert({
+      concepto, categoria, base_imponible, iva, meses_garantia, fecha_compra: fechaLocalHoy(),
+    });
+    if (error) { alert('No se pudo registrar: ' + error.message); return; }
+    cerrarModal();
+    alert('Herramienta registrada. Ahora puedes asignarla a un empleado con "+ Asignar a empleado".');
+  }
+
+  async function abrirModalAsignarHerramienta() {
+    const { data: herramientas } = await sb.from('gastos_y_garantias')
+      .select('id, concepto').eq('categoria', 'herramienta_repartidor').order('fecha_compra', { ascending: false });
+    const { data: empleados } = await sb.from('empleados').select('id, nombre').eq('activo', true).order('nombre');
+
+    if (!herramientas || herramientas.length === 0) {
+      alert('Primero registra una herramienta con "+ Registrar herramienta".');
+      return;
+    }
+
+    abrirModal(`
+      <h3>Asignar herramienta</h3>
+      <div class="modal-field">
+        <label>Herramienta</label>
+        <select id="asig-herramienta">
+          ${herramientas.map(h => `<option value="${h.id}">${h.concepto}</option>`).join('')}
+        </select>
+      </div>
+      <div class="modal-field">
+        <label>Empleado</label>
+        <select id="asig-empleado">
+          ${(empleados || []).map(e => `<option value="${e.id}">${e.nombre}</option>`).join('')}
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn secondary" onclick="cerrarModal()">Cancelar</button>
+        <button class="btn" onclick="guardarAsignacionHerramienta()">Asignar</button>
+      </div>
+    `);
+  }
+
+  async function guardarAsignacionHerramienta() {
+    const herramientaId = document.getElementById('asig-herramienta').value;
+    const empleadoId = document.getElementById('asig-empleado').value;
+
+    const { error } = await sb.from('herramientas_asignadas').insert({
+      herramienta_id: herramientaId, empleado_id: empleadoId,
+      fecha_asignacion: fechaLocalHoy(), estado: 'asignada',
+    });
+    if (error) { alert('No se pudo asignar: ' + error.message); return; }
     cerrarModal();
     cargarEmpleados();
   }
