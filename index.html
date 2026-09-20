@@ -329,7 +329,7 @@
 
     <!-- REPORTES -->
     <section class="view" id="view-reportes">
-      <div class="topbar"><h1 class="page-title">Reportes</h1><span class="page-date">Septiembre 2026</span></div>
+      <div class="topbar"><h1 class="page-title">Reportes</h1><span class="page-date" id="reportes-fecha"></span></div>
 
       <p class="section-label">Ranking de efectividad</p>
       <div id="reportes-ranking"><p class="empty">Conecta Supabase para ver el ranking real.</p></div>
@@ -337,12 +337,21 @@
       <p class="section-label">Alertas de empleados (30 días)</p>
       <div id="reportes-alertas-empleados"><p class="empty">Conecta Supabase para ver las alertas reales.</p></div>
 
+      <p class="section-label">Reporte por proveedor</p>
+      <table>
+        <thead><tr><th>Proveedor</th><th class="num">Entregados</th><th class="num">Incidencias</th><th class="num">Perdidos</th><th class="num">Rotos</th><th class="num">% Incidencia</th></tr></thead>
+        <tbody id="reportes-proveedores-tbody">
+          <tr><td colspan="6" class="empty">Conecta Supabase para ver el reporte real.</td></tr>
+        </tbody>
+      </table>
+
       <p class="section-label">Accesos rápidos</p>
       <div class="grid-2">
-        <button class="btn secondary">Reporte de proveedores</button>
         <button class="btn secondary" onclick="irAVista('adelantos')">Resumen de adelantos</button>
+        <button class="btn secondary" onclick="irAVista('configuracion')">Editar proveedores</button>
       </div>
     </section>
+
 
     <!-- EMPLEADOS -->
     <section class="view" id="view-empleados">
@@ -1327,13 +1336,17 @@
   // REPORTES
   // ============================================================
   async function cargarReportes() {
+    document.getElementById('reportes-fecha').textContent =
+      new Date().toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
     document.getElementById('reportes-ranking').innerHTML = '<p class="loading">Calculando...</p>';
     document.getElementById('reportes-alertas-empleados').innerHTML = '<p class="loading">Calculando...</p>';
+    document.getElementById('reportes-proveedores-tbody').innerHTML = '<tr><td colspan="6" class="loading">Calculando...</td></tr>';
 
     const { data: empleados } = await sb.from('empleados').select('*').eq('activo', true);
     const { data: turnos } = await sb.from('turnos_carga').select('*');
     const { data: ausencias } = await sb.from('ausencias').select('*');
     const { data: incidentesViales } = await sb.from('incidentes_viales').select('*');
+    const { data: proveedores } = await sb.from('proveedores').select('*');
 
     const hace30 = new Date(); hace30.setDate(hace30.getDate() - 30);
 
@@ -1369,6 +1382,30 @@
           <p class="row-sub">${f.ausenciasEmp} ausencias · ${f.incidencias} incidencias · ${f.vialesEmp} vial</p></div>
         </div>`).join('')
       : '<p class="empty">Sin empleados con alertas en los últimos 30 días.</p>';
+
+    const filasProveedor = (proveedores || []).map(p => {
+      const turnosProv = (turnos || []).filter(t => t.proveedor_id === p.id);
+      const entregados = turnosProv.reduce((s, t) => s + (t.entregados || 0), 0);
+      const incidencias = turnosProv.reduce((s, t) => s + (t.incidencias || 0), 0);
+      const perdidos = turnosProv.reduce((s, t) => s + (t.perdidos || 0), 0);
+      const rotos = turnosProv.reduce((s, t) => s + (t.rotos || 0), 0);
+      const totalGestionado = entregados + incidencias + perdidos + rotos;
+      const pctIncidencia = totalGestionado > 0 ? Math.round(((incidencias + perdidos + rotos) / totalGestionado) * 100) : 0;
+      return { nombre: p.nombre, entregados, incidencias, perdidos, rotos, pctIncidencia };
+    }).filter(f => f.entregados + f.incidencias + f.perdidos + f.rotos > 0);
+
+    filasProveedor.sort((a, b) => b.pctIncidencia - a.pctIncidencia);
+
+    document.getElementById('reportes-proveedores-tbody').innerHTML = filasProveedor.map(f => `
+      <tr>
+        <td>${f.nombre}</td>
+        <td class="num">${f.entregados}</td>
+        <td class="num">${f.incidencias}</td>
+        <td class="num">${f.perdidos}</td>
+        <td class="num">${f.rotos}</td>
+        <td class="num" style="color:${f.pctIncidencia > 10 ? 'var(--danger)' : 'var(--text)'}">${f.pctIncidencia}%</td>
+      </tr>
+    `).join('') || '<tr><td colspan="6" class="empty">Sin turnos registrados todavía.</td></tr>';
   }
 
   // ============================================================
