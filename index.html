@@ -319,11 +319,14 @@
     <section class="view" id="view-configuracion">
       <div class="topbar"><h1 class="page-title">Configuración</h1></div>
 
-      <p class="section-label">Proveedores</p>
+      <div style="display:flex; align-items:center; justify-content:space-between; margin:22px 0 10px;">
+        <p class="section-label" style="margin:0;">Proveedores</p>
+        <button class="btn small" onclick="abrirModalNuevoProveedor()">+ Nuevo proveedor</button>
+      </div>
       <table>
-        <thead><tr><th>Nombre</th><th class="num">Tarifa por defecto</th></tr></thead>
+        <thead><tr><th>Nombre</th><th class="num">Tarifa por defecto</th><th>Activo</th><th></th></tr></thead>
         <tbody id="config-proveedores-tbody">
-          <tr><td colspan="2" class="empty">Conecta Supabase para ver los proveedores reales.</td></tr>
+          <tr><td colspan="4" class="empty">Conecta Supabase para ver los proveedores reales.</td></tr>
         </tbody>
       </table>
 
@@ -1141,15 +1144,104 @@
   // CONFIGURACIÓN
   // ============================================================
   async function cargarConfiguracion() {
-    const { data: proveedores } = await sb.from('proveedores').select('*');
+    const { data: proveedores } = await sb.from('proveedores').select('*').order('nombre');
     document.getElementById('config-proveedores-tbody').innerHTML = (proveedores || []).map(p => `
-      <tr><td>${p.nombre}</td><td class="num">${p.tarifa_por_defecto ? euros(p.tarifa_por_defecto) + '/pqt' : '—'}</td></tr>
-    `).join('') || '<tr><td colspan="2" class="empty">Sin proveedores registrados.</td></tr>';
+      <tr>
+        <td>${p.nombre}</td>
+        <td class="num">${p.tarifa_por_defecto ? euros(p.tarifa_por_defecto) + '/pqt' : '—'}</td>
+        <td>${p.activo ? '<span class="tag success">Sí</span>' : '<span class="tag neutral">No</span>'}</td>
+        <td>
+          <button class="btn small secondary" onclick='abrirModalEditarProveedor(${JSON.stringify(p)})'>Editar</button>
+          <button class="btn small secondary" onclick="eliminarProveedor('${p.id}', '${p.nombre.replace(/'/g, "\\'")}')">Eliminar</button>
+        </td>
+      </tr>
+    `).join('') || '<tr><td colspan="4" class="empty">Sin proveedores registrados.</td></tr>';
 
     const { data: tipos } = await sb.from('tipos_paquete').select('*');
     document.getElementById('config-tipos-tbody').innerHTML = (tipos || []).map(t => `
       <tr><td>${t.nombre}</td><td>${t.tarifa_adicional ? '+' + euros(t.tarifa_adicional) : '—'}</td><td>${t.requiere_foto_entrega ? 'Sí' : 'No'}</td></tr>
     `).join('') || '<tr><td colspan="3" class="empty">Sin tipos registrados.</td></tr>';
+  }
+
+  // ------------------------------------------------------------
+  // Gestión de proveedores: crear, editar, eliminar
+  // ------------------------------------------------------------
+  function abrirModalNuevoProveedor() {
+    abrirModal(`
+      <h3>Nuevo proveedor</h3>
+      <div class="modal-field">
+        <label>Nombre</label>
+        <input id="prov-nombre" type="text" placeholder="Amazon">
+      </div>
+      <div class="modal-field">
+        <label>Tarifa por defecto (€ por paquete)</label>
+        <input id="prov-tarifa" type="number" step="0.01" placeholder="1.50">
+      </div>
+      <div class="modal-actions">
+        <button class="btn secondary" onclick="cerrarModal()">Cancelar</button>
+        <button class="btn" onclick="guardarNuevoProveedor()">Crear</button>
+      </div>
+    `);
+  }
+
+  async function guardarNuevoProveedor() {
+    const nombre = document.getElementById('prov-nombre').value.trim();
+    const tarifa = parseFloat(document.getElementById('prov-tarifa').value || '0') || null;
+
+    if (!nombre) { alert('Falta el nombre.'); return; }
+
+    const { error } = await sb.from('proveedores').insert({ nombre, tarifa_por_defecto: tarifa, activo: true });
+    if (error) { alert('No se pudo crear: ' + error.message); return; }
+    cerrarModal();
+    cargarConfiguracion();
+  }
+
+  function abrirModalEditarProveedor(p) {
+    abrirModal(`
+      <h3>Editar proveedor</h3>
+      <div class="modal-field">
+        <label>Nombre</label>
+        <input id="prov-nombre" type="text" value="${p.nombre || ''}">
+      </div>
+      <div class="modal-field">
+        <label>Tarifa por defecto (€ por paquete)</label>
+        <input id="prov-tarifa" type="number" step="0.01" value="${p.tarifa_por_defecto ?? ''}">
+      </div>
+      <div class="modal-field">
+        <label>Activo</label>
+        <select id="prov-activo">
+          <option value="true" ${p.activo ? 'selected' : ''}>Sí</option>
+          <option value="false" ${!p.activo ? 'selected' : ''}>No</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn secondary" onclick="cerrarModal()">Cancelar</button>
+        <button class="btn" onclick="guardarEdicionProveedor('${p.id}')">Guardar</button>
+      </div>
+    `);
+  }
+
+  async function guardarEdicionProveedor(proveedorId) {
+    const nombre = document.getElementById('prov-nombre').value.trim();
+    const tarifa = parseFloat(document.getElementById('prov-tarifa').value || '0') || null;
+    const activo = document.getElementById('prov-activo').value === 'true';
+
+    const { error } = await sb.from('proveedores')
+      .update({ nombre, tarifa_por_defecto: tarifa, activo }).eq('id', proveedorId);
+    if (error) { alert('No se pudo guardar: ' + error.message); return; }
+    cerrarModal();
+    cargarConfiguracion();
+  }
+
+  async function eliminarProveedor(proveedorId, nombre) {
+    if (!confirm(`¿Seguro que quieres eliminar el proveedor "${nombre}"? Esto no se puede deshacer.`)) return;
+
+    const { error } = await sb.from('proveedores').delete().eq('id', proveedorId);
+    if (error) {
+      alert('No se pudo eliminar: probablemente tiene turnos u otros registros asociados. Considera desactivarlo en vez de borrarlo.');
+      return;
+    }
+    cargarConfiguracion();
   }
 
   // ============================================================
