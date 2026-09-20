@@ -159,7 +159,7 @@
     <div class="brand"><div class="brand-mark"></div>Firztnet Reparto</div>
     <div class="nav-item active" data-view="alertas">Alertas <span class="nav-badge">3</span></div>
     <div class="nav-item" data-view="cobertura">Cobertura del día</div>
-    <div class="nav-item" data-view="asignacion">Asignación matutina</div>
+    <div class="nav-item" data-view="asignacion">Fichajes de hoy</div>
     <div class="nav-item" data-view="flota">Flota y talleres</div>
     <div class="nav-item" data-view="liquidacion">Liquidación</div>
     <div class="nav-item" data-view="caja">Caja</div>
@@ -192,12 +192,12 @@
 
     <!-- ASIGNACIÓN -->
     <section class="view" id="view-asignacion">
-      <div class="topbar"><h1 class="page-title">Asignación de carga</h1><span class="page-date">14 sep 2026</span></div>
+      <div class="topbar"><h1 class="page-title">Fichajes de hoy</h1><span class="page-date" id="asignacion-fecha"></span></div>
 
       <table>
-        <thead><tr><th>Repartidor</th><th>Modo</th><th>Zona</th><th class="num">Bultos</th></tr></thead>
+        <thead><tr><th>Repartidor</th><th>Modo</th><th>Zona</th><th class="num">Bultos</th><th>Entrada</th><th>Salida</th><th>Estado</th></tr></thead>
         <tbody id="asignacion-tbody">
-          <tr><td colspan="4" class="empty">Conecta Supabase para ver la asignación real.</td></tr>
+          <tr><td colspan="7" class="empty">Conecta Supabase para ver la asignación real.</td></tr>
         </tbody>
       </table>
       <div style="margin-top:16px;"><button class="btn" onclick="confirmarAsignacion()">Confirmar asignación del día</button></div>
@@ -588,24 +588,36 @@
   // ============================================================
   async function cargarAsignacion() {
     const tbody = document.getElementById('asignacion-tbody');
-    tbody.innerHTML = '<tr><td colspan="4" class="loading">Cargando...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="loading">Cargando...</td></tr>';
 
     const hoy = new Date().toISOString().split('T')[0];
+    document.getElementById('asignacion-fecha').textContent =
+      new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
     const { data: turnos } = await sb.from('turnos_carga')
-      .select('*, empleados(nombre, modo_transporte)').eq('fecha', hoy);
+      .select('*, empleados(nombre, modo_transporte)').eq('fecha', hoy).order('hora_checkin');
 
     if (!turnos || turnos.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="4" class="empty">Sin turnos registrados hoy.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" class="empty">Nadie ha fichado hoy todavía.</td></tr>';
       return;
     }
 
-    tbody.innerHTML = turnos.map(t => `
+    const horaLocal = (iso) => iso ? new Date(iso).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : '—';
+
+    tbody.innerHTML = turnos.map(t => {
+      const estado = t.hora_checkout
+        ? '<span class="tag success">Cerrado</span>'
+        : '<span class="tag warning">En curso</span>';
+      return `
       <tr>
         <td><div class="person"><div class="avatar">${iniciales(t.empleados?.nombre)}</div>${t.empleados?.nombre || '—'}</div></td>
         <td>${t.empleados?.modo_transporte === 'a_pie' ? 'A pie' : 'Furgoneta'}</td>
         <td>${t.zona || '—'}</td>
         <td class="num">${t.bultos_iniciales}</td>
-      </tr>`).join('');
+        <td class="mono">${horaLocal(t.hora_checkin)}</td>
+        <td class="mono">${horaLocal(t.hora_checkout)}</td>
+        <td>${estado}</td>
+      </tr>`;
+    }).join('');
   }
 
   function confirmarAsignacion() {
