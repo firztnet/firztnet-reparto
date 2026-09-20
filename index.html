@@ -331,6 +331,21 @@
     <section class="view" id="view-reportes">
       <div class="topbar"><h1 class="page-title">Reportes</h1><span class="page-date" id="reportes-fecha"></span></div>
 
+      <div class="card" style="margin-bottom:18px;">
+        <div style="display:flex; align-items:flex-end; gap:10px; flex-wrap:wrap;">
+          <div class="modal-field" style="margin-bottom:0;">
+            <label>Desde</label>
+            <input id="reportes-desde" type="date">
+          </div>
+          <div class="modal-field" style="margin-bottom:0;">
+            <label>Hasta</label>
+            <input id="reportes-hasta" type="date">
+          </div>
+          <button class="btn small" onclick="cargarReportes()">Filtrar</button>
+          <button class="btn small secondary" onclick="filtrarReportesMesActual()">Este mes</button>
+        </div>
+      </div>
+
       <p class="section-label">Ranking de efectividad</p>
       <div id="reportes-ranking"><p class="empty">Conecta Supabase para ver el ranking real.</p></div>
 
@@ -1343,15 +1358,36 @@
   // ============================================================
   // REPORTES
   // ============================================================
+  function filtrarReportesMesActual() {
+    const hoyDate = new Date();
+    const primerDiaMes = `${hoyDate.getFullYear()}-${String(hoyDate.getMonth() + 1).padStart(2, '0')}-01`;
+    document.getElementById('reportes-desde').value = primerDiaMes;
+    document.getElementById('reportes-hasta').value = fechaLocalHoy();
+    cargarReportes();
+  }
+
   async function cargarReportes() {
     document.getElementById('reportes-fecha').textContent =
       new Date().toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
     document.getElementById('reportes-ranking').innerHTML = '<p class="loading">Calculando...</p>';
     document.getElementById('reportes-alertas-empleados').innerHTML = '<p class="loading">Calculando...</p>';
     document.getElementById('reportes-proveedores-tbody').innerHTML = '<tr><td colspan="6" class="loading">Calculando...</td></tr>';
+    document.getElementById('reportes-repartidores-tbody').innerHTML = '<tr><td colspan="7" class="loading">Calculando...</td></tr>';
+
+    // Por defecto: del primer día del mes actual a hoy, si no se ha elegido nada.
+    const inputDesde = document.getElementById('reportes-desde');
+    const inputHasta = document.getElementById('reportes-hasta');
+    if (!inputDesde.value || !inputHasta.value) {
+      const hoyDate = new Date();
+      const primerDiaMes = `${hoyDate.getFullYear()}-${String(hoyDate.getMonth() + 1).padStart(2, '0')}-01`;
+      inputDesde.value = primerDiaMes;
+      inputHasta.value = fechaLocalHoy();
+    }
+    const desde = inputDesde.value;
+    const hasta = inputHasta.value;
 
     const { data: empleados } = await sb.from('empleados').select('*').eq('activo', true);
-    const { data: turnos } = await sb.from('turnos_carga').select('*');
+    const { data: turnos } = await sb.from('turnos_carga').select('*').gte('fecha', desde).lte('fecha', hasta);
     const { data: ausencias } = await sb.from('ausencias').select('*');
     const { data: incidentesViales } = await sb.from('incidentes_viales').select('*');
     const { data: proveedores } = await sb.from('proveedores').select('*');
