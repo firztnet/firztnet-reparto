@@ -746,17 +746,55 @@
       }
     });
 
-    if (filas.length === 0) {
+    // --- Seguridad: intentos de fichaje desde un dispositivo no autorizado ---
+    const filasSeguridad = [];
+    const { data: intentos } = await sb.from('intentos_sospechosos')
+      .select('*, empleados(nombre)').eq('revisado', false).order('creado_en', { ascending: false });
+    (intentos || []).forEach(i => {
+      filasSeguridad.push(`
+        <div class="row urgent">
+          <div><p class="row-title">🔒 Intento de fichaje desde dispositivo no autorizado</p>
+          <p class="row-sub">${i.empleados?.nombre || '—'} · ${new Date(i.creado_en).toLocaleString('es-ES')}</p></div>
+          <button class="btn small secondary" onclick="marcarIntentoRevisado('${i.id}')">Marcar revisado</button>
+        </div>`);
+    });
+
+    // --- Seguridad: mismo teléfono usado por dos empleados distintos hoy ---
+    const hoyStr = fechaLocalHoy();
+    const { data: turnosHoyDispositivo } = await sb.from('turnos_carga')
+      .select('device_id, empleado_id, empleados(nombre)').eq('fecha', hoyStr).not('device_id', 'is', null);
+    const porDispositivo = {};
+    (turnosHoyDispositivo || []).forEach(t => {
+      if (!porDispositivo[t.device_id]) porDispositivo[t.device_id] = new Map();
+      porDispositivo[t.device_id].set(t.empleado_id, t.empleados?.nombre);
+    });
+    Object.values(porDispositivo).forEach(mapa => {
+      if (mapa.size > 1) {
+        const nombres = [...mapa.values()].join(', ');
+        filasSeguridad.push(`
+          <div class="row urgent">
+            <div><p class="row-title">🔒 Mismo teléfono usado por varios empleados hoy</p>
+            <p class="row-sub">${nombres}</p></div>
+          </div>`);
+      }
+    });
+
+    if (filas.length === 0 && filasSeguridad.length === 0) {
       el.innerHTML = '<p class="empty">Sin alertas activas.</p>';
       document.querySelector('.nav-badge').textContent = '0';
       return;
     }
-    el.innerHTML = filas.map(f => `
+    el.innerHTML = filasSeguridad.join('') + filas.map(f => `
       <div class="row ${f.tipo}">
         <div><p class="row-title">${f.titulo}</p>${f.sub ? `<p class="row-sub">${f.sub}</p>` : ''}</div>
       </div>`).join('');
 
-    document.querySelector('.nav-badge').textContent = filas.filter(f => f.tipo === 'urgent').length;
+    document.querySelector('.nav-badge').textContent = filas.filter(f => f.tipo === 'urgent').length + filasSeguridad.length;
+  }
+
+  async function marcarIntentoRevisado(intentoId) {
+    await sb.from('intentos_sospechosos').update({ revisado: true }).eq('id', intentoId);
+    cargarAlertas();
   }
 
   // ============================================================
@@ -1527,6 +1565,7 @@
         <td>${estadoTag}</td>
         <td>
           <button class="btn small secondary" onclick="abrirModalCambiarPin('${e.id}')">PIN</button>
+          <button class="btn small secondary" onclick="resetearDispositivo('${e.id}', '${e.nombre.replace(/'/g, "\\'")}')">📱 Reset</button>
           <button class="btn small secondary" onclick="alternarActivoEmpleado('${e.id}', ${e.activo})">${e.activo ? 'Desactivar' : 'Activar'}</button>
         </td>
       </tr>`;
@@ -2038,6 +2077,14 @@
     if (error) { alert('No se pudo cambiar: ' + error.message); return; }
     cerrarModal();
     alert('PIN actualizado.');
+  }
+
+  async function resetearDispositivo(empleadoId, nombre) {
+    if (!confirm(`¿Autorizar un nuevo teléfono para ${nombre}? El próximo dispositivo desde el que inicie sesión quedará autorizado automáticamente.`)) return;
+
+    const { error } = await sb.rpc('resetear_dispositivo_empleado', { p_empleado_id: empleadoId });
+    if (error) { alert('No se pudo resetear: ' + error.message); return; }
+    alert(`Listo. ${nombre} puede fichar de nuevo desde cualquier teléfono — el primero que use quedará autorizado.`);
   }
 
   async function alternarActivoEmpleado(empleadoId, activoActual) {
