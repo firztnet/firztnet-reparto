@@ -637,7 +637,7 @@
 
     const [{ data: empleados }, { data: turnos }, { data: vehiculos }, { data: zonas }] = await Promise.all([
       sb.from('empleados').select('id, modo_transporte').eq('activo', true),
-      sb.from('turnos_carga').select('entregados, incidencias, perdidos, hora_checkout, vehiculo_id').eq('fecha', hoy),
+      sb.from('turnos_carga').select('zona, entregados, incidencias, perdidos, hora_checkout, vehiculo_id').eq('fecha', hoy),
       sb.from('vehiculos').select('id, estado'),
       sb.from('zonas_cobertura').select('id, estado, codigo_postal').eq('fecha', hoy),
     ]);
