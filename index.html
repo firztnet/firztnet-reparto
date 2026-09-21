@@ -762,7 +762,7 @@
     // --- Seguridad: mismo teléfono usado por dos empleados distintos hoy ---
     const hoyStr = fechaLocalHoy();
     const { data: turnosHoyDispositivo } = await sb.from('turnos_carga')
-      .select('device_id, empleado_id, empleados(nombre)').eq('fecha', hoyStr).not('device_id', 'is', null);
+      .select('device_id, empleado_id, empleados!turnos_carga_empleado_id_fkey(nombre)').eq('fecha', hoyStr).not('device_id', 'is', null);
     const porDispositivo = {};
     (turnosHoyDispositivo || []).forEach(t => {
       if (!porDispositivo[t.device_id]) porDispositivo[t.device_id] = new Map();
