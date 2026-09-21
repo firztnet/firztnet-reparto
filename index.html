@@ -498,6 +498,7 @@
   const UMBRAL_ADELANTO_REVISION = 60;
   const UMBRAL_AUSENCIAS_MES = 3;
   const UMBRAL_INCIDENCIAS_MES = 5;
+  const UMBRAL_HORA_SIN_FICHAR = 10; // a partir de esta hora local, se alerta si alguien no fichó ni avisó
 
   async function iniciarSesion() {
     const email = document.getElementById('login-email').value.trim();
@@ -778,6 +779,33 @@
           </div>`);
       }
     });
+
+    // --- Empleados que no ficharon ni avisaron ausencia (a partir del umbral de hora) ---
+    if (hoy.getHours() >= UMBRAL_HORA_SIN_FICHAR) {
+      const diaSemanaHoy = hoy.getDay() === 0 ? 7 : hoy.getDay(); // 1=lunes ... 7=domingo, igual que dia_descanso_habitual
+      const hoyStrNoShow = fechaLocalHoy();
+
+      const { data: empleadosActivos } = await sb.from('empleados').select('id, nombre, dia_descanso_habitual').eq('activo', true);
+      const { data: turnosHoyNoShow } = await sb.from('turnos_carga').select('empleado_id').eq('fecha', hoyStrNoShow);
+      const { data: ausenciasHoy } = await sb.from('ausencias').select('empleado_id').eq('fecha', hoyStrNoShow);
+      const { data: descansosHoy } = await sb.from('descansos').select('empleado_id')
+        .lte('fecha_inicio', hoyStrNoShow).gte('fecha_fin', hoyStrNoShow).eq('estado', 'aprobado');
+
+      const idsConTurno = new Set((turnosHoyNoShow || []).map(t => t.empleado_id));
+      const idsConAusencia = new Set((ausenciasHoy || []).map(a => a.empleado_id));
+      const idsConDescanso = new Set((descansosHoy || []).map(d => d.empleado_id));
+
+      (empleadosActivos || []).forEach(e => {
+        const esDiaDeDescanso = e.dia_descanso_habitual === diaSemanaHoy;
+        if (!idsConTurno.has(e.id) && !idsConAusencia.has(e.id) && !idsConDescanso.has(e.id) && !esDiaDeDescanso) {
+          filasSeguridad.push(`
+            <div class="row urgent">
+              <div><p class="row-title">🚨 ${e.nombre} no ha fichado ni avisado ausencia</p>
+              <p class="row-sub">Sin fichaje ni aviso hoy hasta las ${UMBRAL_HORA_SIN_FICHAR}:00</p></div>
+            </div>`);
+        }
+      });
+    }
 
     if (filas.length === 0 && filasSeguridad.length === 0) {
       el.innerHTML = '<p class="empty">Sin alertas activas.</p>';
