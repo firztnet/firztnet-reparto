@@ -795,16 +795,30 @@
       const idsConAusencia = new Set((ausenciasHoy || []).map(a => a.empleado_id));
       const idsConDescanso = new Set((descansosHoy || []).map(d => d.empleado_id));
 
+      const nuevasAusenciasSinAviso = [];
+
       (empleadosActivos || []).forEach(e => {
         const esDiaDeDescanso = e.dia_descanso_habitual === diaSemanaHoy;
         if (!idsConTurno.has(e.id) && !idsConAusencia.has(e.id) && !idsConDescanso.has(e.id) && !esDiaDeDescanso) {
           filasSeguridad.push(`
             <div class="row urgent">
               <div><p class="row-title">🚨 ${e.nombre} no ha fichado ni avisado ausencia</p>
-              <p class="row-sub">Sin fichaje ni aviso hoy hasta las ${UMBRAL_HORA_SIN_FICHAR}:00</p></div>
+              <p class="row-sub">Sin fichaje ni aviso hoy hasta las ${UMBRAL_HORA_SIN_FICHAR}:00 · quedó registrado en su ficha</p></div>
             </div>`);
+          // Queda en el historial del empleado, marcado como "sin_aviso" (distinto
+          // de cuando el empleado sí avisa con antelación). Solo se inserta una vez:
+          // en la próxima carga, idsConAusencia ya lo va a incluir y no se duplica.
+          nuevasAusenciasSinAviso.push({
+            empleado_id: e.id, fecha: hoyStrNoShow, tipo: 'otro',
+            nota_opcional: 'Detectado automáticamente: sin fichaje ni aviso',
+            estado: 'sin_aviso',
+          });
         }
       });
+
+      if (nuevasAusenciasSinAviso.length > 0) {
+        await sb.from('ausencias').insert(nuevasAusenciasSinAviso);
+      }
     }
 
     if (filas.length === 0 && filasSeguridad.length === 0) {
