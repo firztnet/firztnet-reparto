@@ -353,11 +353,11 @@
       <p class="section-label">Alertas de empleados (30 días)</p>
       <div id="reportes-alertas-empleados"><p class="empty">Conecta Supabase para ver las alertas reales.</p></div>
 
-      <p class="section-label">Detalle por repartidor</p>
+      <p class="section-label">Detalle por repartidor (por turno)</p>
       <table>
-        <thead><tr><th>Repartidor</th><th class="num">Entregados</th><th class="num">Incidencias</th><th class="num">Perdidos</th><th class="num">Rotos</th><th class="num">% Incidencia</th><th class="num">Efectividad</th></tr></thead>
+        <thead><tr><th>Repartidor</th><th>Fecha</th><th>Día</th><th>Proveedor</th><th>Zona</th><th class="num">Bultos</th><th class="num">Entregados</th><th class="num">Incidencias</th><th class="num">Perdidos</th><th class="num">Rotos</th></tr></thead>
         <tbody id="reportes-repartidores-tbody">
-          <tr><td colspan="7" class="empty">Conecta Supabase para ver el detalle real.</td></tr>
+          <tr><td colspan="10" class="empty">Conecta Supabase para ver el detalle real.</td></tr>
         </tbody>
       </table>
 
@@ -1478,7 +1478,7 @@
     document.getElementById('reportes-ranking').innerHTML = '<p class="loading">Calculando...</p>';
     document.getElementById('reportes-alertas-empleados').innerHTML = '<p class="loading">Calculando...</p>';
     document.getElementById('reportes-proveedores-tbody').innerHTML = '<tr><td colspan="6" class="loading">Calculando...</td></tr>';
-    document.getElementById('reportes-repartidores-tbody').innerHTML = '<tr><td colspan="7" class="loading">Calculando...</td></tr>';
+    document.getElementById('reportes-repartidores-tbody').innerHTML = '<tr><td colspan="10" class="loading">Calculando...</td></tr>';
 
     // Por defecto: del primer día del mes actual a hoy, si no se ha elegido nada.
     const inputDesde = document.getElementById('reportes-desde');
@@ -1536,18 +1536,28 @@
         </div>`).join('')
       : '<p class="empty">Sin empleados con alertas en los últimos 30 días.</p>';
 
-    const filasOrdenadas = [...filas].sort((a, b) => b.entregados - a.entregados);
-    document.getElementById('reportes-repartidores-tbody').innerHTML = filasOrdenadas.map(f => `
+    // Bitácora: una fila por turno trabajado, con fecha, día, proveedor y zona.
+    const diasSemana = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    const empleadosPorId = Object.fromEntries((empleados || []).map(e => [e.id, e.nombre]));
+    const proveedoresPorId = Object.fromEntries((proveedores || []).map(p => [p.id, p.nombre]));
+
+    const turnosOrdenados = [...(turnos || [])].sort((a, b) => b.fecha.localeCompare(a.fecha));
+    document.getElementById('reportes-repartidores-tbody').innerHTML = turnosOrdenados.map(t => {
+      const fechaObj = new Date(t.fecha + 'T00:00:00');
+      return `
       <tr>
-        <td><div class="person"><div class="avatar">${iniciales(f.emp.nombre)}</div>${f.emp.nombre}</div></td>
-        <td class="num">${f.entregados}</td>
-        <td class="num">${f.incidencias}</td>
-        <td class="num">${f.perdidos}</td>
-        <td class="num">${f.rotos}</td>
-        <td class="num" style="color:${f.pctIncidencia > 10 ? 'var(--danger)' : 'var(--text)'}">${f.pctIncidencia}%</td>
-        <td class="num" style="color:${f.efectividad < 85 ? 'var(--danger)' : 'var(--success)'}">${f.efectividad}%</td>
-      </tr>
-    `).join('') || '<tr><td colspan="7" class="empty">Sin turnos registrados todavía.</td></tr>';
+        <td><div class="person"><div class="avatar">${iniciales(empleadosPorId[t.empleado_id])}</div>${empleadosPorId[t.empleado_id] || '—'}</div></td>
+        <td class="mono">${t.fecha}</td>
+        <td>${diasSemana[fechaObj.getDay()]}</td>
+        <td>${proveedoresPorId[t.proveedor_id] || '—'}</td>
+        <td>${t.zona || '—'}</td>
+        <td class="num">${t.bultos_iniciales ?? '—'}</td>
+        <td class="num">${t.entregados ?? 0}</td>
+        <td class="num">${t.incidencias ?? 0}</td>
+        <td class="num">${t.perdidos ?? 0}</td>
+        <td class="num">${t.rotos ?? 0}</td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="10" class="empty">Sin turnos registrados en este periodo.</td></tr>';
 
     const filasProveedor = (proveedores || []).map(p => {
       const turnosProv = (turnos || []).filter(t => t.proveedor_id === p.id);
